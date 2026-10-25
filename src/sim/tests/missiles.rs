@@ -171,11 +171,15 @@ fn a_musket_ball_stops_at_the_wall() {
     let musket = add_type(&w, &fixture("physics/musket.js"));
     let hut = add_type(&w, &fixture("physics/hut.js"));
     let h = flat_spot(&w, 50.0);
-    place(&w, hut, h, 0.0);
+    let hi = place(&w, hut, h, 0.0);
     let p = ground(&w, h.x - 16.0, h.z);
     let mi = place(&w, musket, p + Vec3::new(0.5, 0.0, 0.0), 0.0);
     let mut s = session(&w, 73, None);
     s.sim.player.pos = p;
+    // A wooden hut of some weight.
+    let hut_id = s.sim.liven(&Target::Instance(hi)).unwrap();
+    let ht = s.sim.things.get_mut(hut_id).unwrap();
+    (ht.props[P_BURNS], ht.props[P_MASS]) = (0.6, 4000.0);
     act_once(&mut s, ActorId::Player, Action::Hold { target: Target::Instance(mi) }, 0.5);
     let wall = Vec3::new(h.x - 3.2, h.y + 1.4, h.z);
     let r = act_once(&mut s, ActorId::Player, Action::Use { target: None, on: Some(Target::Point(wall.to_array())), at: Some(wall.to_array()) }, 1.5);
@@ -188,6 +192,9 @@ fn a_musket_ball_stops_at_the_wall() {
     // Too small to see, it is cleared away; nothing got through.
     let slug = builtin_id(&w, "slug");
     assert!(!s.sim.things.live().any(|t| t.type_id == slug && t.pos.x > h.x - 2.0), "nothing passed through");
+    // The hut took the knock: a hole, and a little worn.
+    let ht = s.sim.things.get(hut_id).unwrap();
+    assert!(!ht.shape.cuts.is_empty() && ht.props[P_HEALTH] < 1.0, "holed {} times, health {:.3}", ht.shape.cuts.len(), ht.props[P_HEALTH]);
     sound(&s);
 }
 

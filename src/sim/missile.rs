@@ -19,7 +19,7 @@ use super::actions::{ActErr, Outcome, fail};
 #[cfg(test)]
 use super::physics::GRAVITY;
 use super::things::{Origin, StuckIn, ThingId};
-use super::tool::{Blow, MotionRun};
+use super::tool::{Blow, Knock, MotionRun, bite_of};
 use super::{ActorId, Note, Sim, Target};
 use crate::lang::ir::{Launch, Tool};
 use crate::world::TypeEntry;
@@ -314,6 +314,31 @@ impl Sim {
         };
         let push = Vec3::new(dir.x, 0.0, dir.z).normalize_or_zero() * (mass * speed / 70.0).min(0.4);
         self.take_blow(Blow { by: Some(by), to: o, hurt, push, how, told, felt, weapon: Some(tname), mass, speed, motion: if shot { "shot" } else { "thrown" } })
+    }
+
+    /// Something sent flying strikes a standing thing (a wall, a tree, a
+    /// cart): it is knocked as a blow would knock it, by the flier's weight
+    /// and speed; going fast, it leaves a hole its size; and the two meet
+    /// by the world's rules (a hot shot, dry thatch).
+    pub(super) fn flying_knock(&mut self, id: ThingId, at: Vec3, v: Vec3, speed: f32) {
+        let Some(t) = self.things.get(id) else { return };
+        let Some((by, _)) = t.thrown_by else { return };
+        let Some(ty) = self.snap.type_of(t.type_id).cloned() else { return };
+        let (mass, size, shot, props) = (t.mass(), ty.radius() * t.scale, t.shot, t.props.clone());
+        let hard = crate::audio::call::Material::of(&props, &ty.ct.meta.tags, crate::audio::call::Material::from_meta(&ty.ct.meta.sound).as_ref()).hard;
+        let keen = self.keen_of(id);
+        let Some((on, spot)) = self.standing_near(at, size + 0.3).into_iter().find(|(o, _)| *o != Target::Thing(id)) else { return };
+        let Some(on) = self.liven(&on) else { return };
+        if on == id {
+            return;
+        }
+        self.contact(id, on);
+        let name = self.thing_name(id);
+        let from = self.actor(by).map(|a| a.pos).unwrap_or(at - v.normalize_or_zero());
+        let deed = if shot { "shoot at".to_string() } else { format!("throw the {name} at") };
+        let notch = if speed > 60.0 { (size * 3.0).clamp(0.03, 0.6) } else { 0.14 * keen };
+        let knock = Knock { by, on, at: spot, from, deed, with: name, bite: bite_of("flight", keen), momentum: mass * speed, hard, notch };
+        self.take_knock(knock);
     }
 
     /// What a held thing can do as a weapon, in words for a planner ("it

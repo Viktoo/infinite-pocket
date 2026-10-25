@@ -94,6 +94,19 @@ impl Sim {
         }))
     }
 
+    /// Whether a small cut at `at` (world) shows: there is room for one
+    /// more, or one already near enough to grow into. Blows spread over a
+    /// whole wall leave as many holes as it can show, not one great gap.
+    pub fn cut_fits(&self, id: ThingId, at: Vec3, size: f32) -> bool {
+        let (Some(t), Some(solid)) = (self.things.get(id), solid_of(self, id)) else { return false };
+        if t.shape.cuts.len() < crate::render::MAX_CUTS {
+            return true;
+        }
+        let c = to_local(&solid, at);
+        let r = size / solid.inst.pos_scale[3].max(0.01);
+        t.shape.cuts.iter().any(|o| Vec3::new(o[0], o[1], o[2]).distance(c) < (o[3].abs() + r) * 1.5)
+    }
+
     /// Cut a piece out of a thing at `at` (world): a round hole or dent of
     /// `size` metres radius, or a square one. When a thing already has as many
     /// cuts as it can show, the new one merges with the nearest.

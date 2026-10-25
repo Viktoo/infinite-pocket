@@ -457,6 +457,13 @@ impl Sim {
                 t.rest_t = 0.0;
             }
         }
+        // Sent flying into something standing: a knock to it too.
+        if thrown.is_some() && hit_name.is_some() && impact > IMPACT_SAFE * 2.0 && matches!(struck, Some((_, None))) {
+            self.flying_knock(id, p, v_in, impact);
+            if self.things.get(id).is_none() {
+                return false;
+            }
+        }
         // Flying point first: it sticks where it strikes keen and fast
         // enough along its point; else it glances off and falls flat.
         if pointed {
