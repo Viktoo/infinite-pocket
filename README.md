@@ -16,6 +16,8 @@ Then invite a friend into your world and build it together.
 
 ## Install (Mac with Apple Silicon)
 
+Needs [Homebrew](https://brew.sh).
+
 ```bash
 brew install viktoo/tap/pocket
 ```
