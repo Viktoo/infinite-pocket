@@ -438,6 +438,12 @@ impl Sim {
 
     /// Ask the world what an action does (cached, else the LLM).
     pub fn interpret(&mut self, who: ActorId, text: &str, target: Option<Resolved>, hit: Option<glam::Vec3>) -> Result<Outcome, ActErr> {
+        self.interpret_noted(who, text, target, hit, None)
+    }
+
+    /// The same, with a note for the interpreter only (what to settle), kept
+    /// out of the deed the player sees.
+    pub fn interpret_noted(&mut self, who: ActorId, text: &str, target: Option<Resolved>, hit: Option<glam::Vec3>, note: Option<&str>) -> Result<Outcome, ActErr> {
         let held = self.actor(who).and_then(|a| a.held);
         let held_name = held.map(|h| self.thing_name(h)).unwrap_or_default();
         let target_name = target.as_ref().map(|r| r.name.clone()).unwrap_or_default();
@@ -474,7 +480,13 @@ impl Sim {
             return Ok(Outcome { ok: false, msg: "Nothing happens.".into(), pending: None, thing: None });
         }
         let id = self.next_id();
-        let context = self.interp_context(who, held, target.as_ref(), hit);
+        let mut context = self.interp_context(who, held, target.as_ref(), hit);
+        if let Some(n) = note {
+            if let Ok(mut v) = serde_json::from_str::<Value>(&context) {
+                v["note"] = json!(n);
+                context = v.to_string();
+            }
+        }
         let req = Request::Interpret { id, actor: who, text: text.to_string(), context };
         if who == ActorId::Player {
             self.request_now(req);

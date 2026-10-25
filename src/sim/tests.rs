@@ -4477,6 +4477,34 @@ fn tools_swing_dig_and_chop() {
     sound(&s);
 }
 
+/// A sword swung at a wooden stool wears it down until it gives way.
+#[test]
+fn sword_wears_down_a_stool() {
+    let w = world_with("wear", 64, bare());
+    let sword = add_type(&w, &fixture("physics/sword.js"));
+    let stool = add_type(&w, "export const meta = { name: \"test stool\", bounds: [0.25, 0.25, 0.25], tags: [\"item\"], props: { mass: 5, burns: 0.6 } };\nexport function sdf(x, y, z, k) { return box(x, y, z, 0.25, 0.25, 0.25); }\nexport function color(x, y, z, k) { return rgb(150, 110, 70); }\n");
+    let p = flat_spot(&w, 30.0);
+    let si = place(&w, sword, p + Vec3::new(0.5, 0.0, 0.0), 0.0);
+    let ti = place(&w, stool, p + Vec3::new(0.0, 0.0, 1.0), 0.0);
+    let mut s = session(&w, 64, None);
+    s.sim.player.pos = p;
+    act_once(&mut s, ActorId::Player, Action::Hold { target: Target::Instance(si) }, 0.5);
+    let held = s.sim.player.held.unwrap();
+    s.sim.things.get_mut(held).unwrap().props[P_MASS] = 6.0;
+    // Fixed in place, so the blows don't knock it out of reach.
+    let tid = s.sim.liven(&Target::Instance(ti)).unwrap();
+    s.sim.things.get_mut(tid).unwrap().anchored = true;
+    for _ in 0..14 {
+        if events(&s.sim, "worn").iter().any(|e| e.data["stage"] == 3) {
+            break;
+        }
+        act_once(&mut s, ActorId::Player, Action::Use { target: None, on: Some(Target::Instance(ti)), at: None }, 0.9);
+    }
+    assert!(s.sim.things.get(tid).unwrap().props[P_HEALTH] <= 0.0, "worn through: {:.2}", s.sim.things.get(tid).unwrap().props[P_HEALTH]);
+    assert!(events(&s.sim, "worn").iter().any(|e| e.data["stage"] == 3), "it gave way");
+    assert!(!s.sim.things.get(tid).unwrap().shape.cuts.is_empty(), "the blade left notches");
+}
+
 /// A settlement's buildings are joined by roads (scatter keeps off them) and
 /// lamps stand along them; a cellar house takes the ground away under it.
 #[test]

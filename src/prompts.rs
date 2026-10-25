@@ -443,7 +443,7 @@ pub const INTERPRET_TASK: &str = r#"You are the physics and common sense of a sm
   "source": false,
   "cache": true
 }
-- "held" is what the actor holds; "target" is what the middle of their view points at (a thing with its distance, or the ground or a far point). Use only property names from the list. Set "cache": false if the result depends on chance or the moment.
+- "held" is what the actor holds; "target" is what the middle of their view points at (a thing with its distance, or the ground or a far point). Use only property names from the list. Set "cache": false if the result depends on chance or the moment. A "note" in the context, when there is one, says what the engine needs settled about this deed; follow it.
 - Prefer small, plausible results. Things can be made from things (carving wood makes a carving; replace the wood). Materials worked into something new are used up ("replace" one, "remove" any other); tools used to work them are not. A made thing can be made into something else again. If nothing would happen, say so in the narration and change nothing.
 - The world only holds things about the size of a cat and up. Smaller inputs that are common in this world (ingredients, tortillas, foil, thread, nails, paint, seeds, small tools) are never there to see but are always at hand: never refuse or fail for lack of them. Rare or special small things (a phoenix feather, a dragon's scale, a royal seal) are not at hand. Real things that are there (the held thing, the target, wood, stone, a building) are used when the words name them.
 - "actor_is" says who acts. The traveler makes what they ask outright, from nothing if need be: a burrito, a lantern, a tree, a house. Always do it, in the universe's own style, and never refuse it.

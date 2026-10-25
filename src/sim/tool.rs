@@ -370,11 +370,8 @@ impl Sim {
                         t.dirty = true;
                     }
                 }
-                // An edge bites: a chop leaves a notch, and wears down what grows until it falls.
-                if run.name == "chop" {
-                    let _ = self.cut(who, id, Some(at), 0.14, false);
-                    self.chop_wears(who, id, tool_mass, me);
-                }
+                let keen = tool_ty.as_ref().and_then(|ty| ty.ct.meta.tool.as_ref()).map(|t| t.keen()).unwrap_or(0.0);
+                self.wear_down(who, id, run.name, keen, speed, tool_mass, mat.hard, at, me);
                 self.event("struck", Some(who), Some(format!("thing:{id}")), format!("{name} struck the {oname} with the {tname}"), Some(at), json!({ "speed": (speed * 10.0).round() / 10.0, "motion": run.name }));
             }
         }
@@ -393,44 +390,68 @@ impl Sim {
         }
     }
 
-    /// Something growing chopped at wears down; past its last, it falls.
-    fn chop_wears(&mut self, who: ActorId, id: ThingId, tool_mass: f32, from: Vec3) {
+    /// A blow wears down what it lands on: by the tool's weight, speed and
+    /// edge against the thing's size and hardness. An edge leaves a notch.
+    /// Each third worn through, the world says what it does (a branch comes
+    /// off, a stone chips, a wall gives way); something growing worn right
+    /// through falls first.
+    #[allow(clippy::too_many_arguments)]
+    fn wear_down(&mut self, who: ActorId, id: ThingId, motion: &str, keen: f32, speed: f32, tool_mass: f32, tool_hard: f32, at: Vec3, from: Vec3) {
         let Some(t) = self.things.get(id) else { return };
-        if t.props[P_ALIVE] <= 0.0 || t.held() {
+        if t.held() || t.props[P_HEALTH] <= 0.0 {
             return;
         }
-        let ty = self.snap.type_of(t.type_id).cloned();
-        let mass = t.mass().max(1.0);
-        let wear = (0.08 + tool_mass * 0.06) / (mass / 200.0).max(1.0).sqrt();
-        let pos = t.pos;
-        let mut fell = false;
+        let Some(ty) = self.snap.type_of(t.type_id).cloned() else { return };
+        let hard = crate::audio::call::Material::of(&t.props, &ty.ct.meta.tags, crate::audio::call::Material::from_meta(&ty.ct.meta.sound).as_ref()).hard;
+        let wear = blow_wear(motion, keen, speed, tool_mass, tool_hard, hard, t.mass());
+        if wear <= 0.0 {
+            return;
+        }
+        // An edge bites into what it can: a notch, smaller in harder stuff.
+        let notch = if motion == "chop" { 0.14 } else { 0.14 * keen } * (1.1 - hard).clamp(0.0, 1.0);
+        if notch > 0.03 {
+            let _ = self.cut(who, id, Some(at), notch, false);
+        }
+        let (pos, alive, before) = match self.things.get(id) {
+            Some(t) => (t.pos, t.props[P_ALIVE] > 0.0, t.props[P_HEALTH]),
+            None => return,
+        };
+        let after = (before - wear).max(0.0);
         if let Some(t) = self.things.get_mut(id) {
-            t.props[P_HEALTH] = (t.props[P_HEALTH] - wear).max(0.0);
-            if t.props[P_HEALTH] <= 0.0 {
-                // It goes over away from the one chopping.
+            t.props[P_HEALTH] = after;
+            t.dirty = true;
+        }
+        let Some(stage) = stage_crossed(before, after) else { return };
+        let name = self.actor_name(who);
+        let n = ty.name().to_string();
+        let tname = self.thing_name(self.actor(who).and_then(|a| a.held).unwrap_or(id));
+        let what = if stage == 3 && alive {
+            // It goes over away from the one striking.
+            if let Some(t) = self.things.get_mut(id) {
                 let away = Vec3::new(pos.x - from.x, 0.0, pos.z - from.z).normalize_or(Vec3::Z);
                 let axis = Vec3::Y.cross(away).normalize_or(Vec3::X);
-                let yaw = Quat::from_rotation_y(t.yaw);
-                let local_axis = yaw.inverse() * axis;
+                let local_axis = Quat::from_rotation_y(t.yaw).inverse() * axis;
                 t.set_tilt(Quat::from_axis_angle(local_axis, 1.45) * t.tilt());
                 t.props[P_ALIVE] = 0.0;
-                t.dirty = true;
-                fell = true;
             }
-        }
-        if fell {
-            let n = ty.map(|t| t.name().to_string()).unwrap_or_else(|| "tree".into());
-            let msg = format!("{} felled the {n}", self.actor_name(who));
+            let msg = format!("{name} felled the {n}");
             self.event("felled", Some(who), Some(format!("thing:{id}")), msg.clone(), Some(pos), json!({}));
             self.note_near(pos, 40.0, Note::Notable(format!("{}.", super::physics::cap(&msg))));
             self.witness(pos, 30.0, &msg, 0.4, &[who]);
-            // What it comes apart into is the world's to say (logs, branches,
-            // a stump), as for any deed: the one who felled it set it going.
-            let what = format!("let the felled {n} come apart into what a felled {n} gives here, replacing it");
-            let r = super::actions::Resolved::new(Target::Thing(id), pos, n.clone());
-            if let Err(e) = self.interpret(who, &what, Some(r), None) {
-                crate::log::info(format!("the felled {n} stays as it fell: {e:?}"));
+            (format!("fell the {n}"), format!("The {n} was felled and lies where it fell: let it come apart into what a felled {n} gives here, replacing it."))
+        } else {
+            let how = ["", "a third", "two thirds", "right"][stage];
+            let msg = format!("{name} wore the {n} {how} through with the {tname}");
+            self.event("worn", Some(who), Some(format!("thing:{id}")), msg.clone(), Some(pos), json!({ "stage": stage }));
+            if stage == 3 {
+                self.witness(pos, 30.0, &msg, 0.3, &[who]);
             }
+            (format!("{motion} the {tname} at the {n}, wearing it {how} through"), format!("Blows have worn the {n} {how} through. Say what that does to it here: a piece comes off, it cracks, splits or gives way, or it holds."))
+        };
+        // What it comes to is the world's to say, as for any deed.
+        let r = super::actions::Resolved::new(Target::Thing(id), pos, n.clone());
+        if let Err(e) = self.interpret_noted(who, &what.0, Some(r), None, Some(&what.1)) {
+            crate::log::info(format!("the {n} stays as it is: {e:?}"));
         }
     }
 
@@ -606,4 +627,47 @@ pub fn arm_pose(run: &MotionRun, now: f64, pose: &mut super::actor::Pose) {
     pose[R_RAISE] = fr.raise;
     pose[R_FWD] = fr.reach;
     pose[LEAN] = fr.lean;
+}
+
+/// How much one blow wears a thing down (of its health, 0..1): the tool's
+/// weight and speed, how it cuts (a chop bites deepest, a keen swing more
+/// than a blunt one, a point least), against the thing's size and how much
+/// harder it is than the tool.
+pub fn blow_wear(motion: &str, keen: f32, speed: f32, tool_mass: f32, tool_hard: f32, hard: f32, mass: f32) -> f32 {
+    let bite = match motion {
+        "chop" => 1.0,
+        "swing" => 0.5 + 0.4 * keen,
+        "thrust" => 0.3 + 0.3 * keen,
+        "dig" => 0.5,
+        _ => return 0.0,
+    };
+    let give = (1.15 - hard).clamp(0.1, 1.0) * (tool_hard / hard.max(0.05)).clamp(0.2, 1.0);
+    (0.08 + tool_mass * 0.06) * (speed / 15.0).clamp(0.3, 1.5) * bite * give / (mass.max(1.0) / 200.0).max(1.0).sqrt()
+}
+
+/// The deepest third of health a blow wore past (1, 2, 3: worn through).
+fn stage_crossed(before: f32, after: f32) -> Option<usize> {
+    let stage = |h: f32| ((1.0 - h) * 3.0 + 1e-4).floor().clamp(0.0, 3.0) as usize;
+    (stage(after) > stage(before)).then(|| stage(after))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A heavy blade cuts a live tree in a few blows and stone only in
+    /// many; an axe bites deeper than a club, and a club on stone barely.
+    #[test]
+    fn blows_wear_by_weight_edge_and_hardness() {
+        let (steel, wood, live, stone) = (0.85, 0.65, 0.3, 0.85);
+        let birch = blow_wear("swing", 0.8, 20.0, 6.0, steel, live, 300.0);
+        let boulder = blow_wear("swing", 0.8, 20.0, 6.0, steel, stone, 3000.0);
+        assert!(birch > 0.25 && boulder < 0.05, "birch {birch:.3}, boulder {boulder:.3}");
+        assert!(blow_wear("chop", 0.6, 15.0, 2.5, steel, live, 300.0) > blow_wear("swing", 0.0, 15.0, 2.5, wood, live, 300.0));
+        assert!(blow_wear("swing", 0.0, 15.0, 2.5, wood, stone, 3000.0) < 0.01);
+        assert_eq!(blow_wear("pour", 0.0, 15.0, 2.5, steel, live, 1.0), 0.0);
+        assert_eq!(stage_crossed(1.0, 0.9), None);
+        assert_eq!(stage_crossed(0.9, 0.3), Some(2));
+        assert_eq!(stage_crossed(0.2, 0.0), Some(3));
+    }
 }
