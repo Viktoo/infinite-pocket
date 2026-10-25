@@ -6,7 +6,7 @@
 
 ![A slow flight down over Maple Cove's village green at golden hour: a gazebo, pumpkins and flower stalls, homes all round and the sea behind](docs/clips/hero-flyover.webp)
 
-Type what you want and it's there: `/create a hobbit hut`, `/conjure a pegasus I can ride`, `/poke my eye out with this stick`. The AI writes it as code, on the spot, and it becomes part of the world.
+Type what you want to create or do and it happens: `/create a hobbit hut`, `/conjure a pegasus I can ride`, `/poke my eye out with this stick`. The AI writes it as code, on the spot, and it becomes part of the world.
 
 The people in it remember you. They have homes, needs, friends and plans. They gossip, collaborate, play catch, and make things of their own. Dogs fetch, sheep bolt from wolves, fire spreads. At night something comes for you.
 
