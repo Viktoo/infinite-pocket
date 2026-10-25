@@ -1,6 +1,7 @@
 # A release: push a tag vX.Y.Z (matching Cargo.toml's version) and this
 # builds Infinite Pocket for Apple Silicon Macs, attaches it to a GitHub
 # release of that tag, and points `brew install viktoo/tap/pocket` at it.
+# A Windows build (beta, untested) is attached too when it builds.
 # See docs/releases.md.
 name: release
 
@@ -53,6 +54,8 @@ jobs:
 
           Or unzip the app and move Infinite Pocket to Applications. It isn't signed yet, so the first time macOS won't open it: open System Settings → Privacy & Security and click Open Anyway.
 
+          **Windows (beta, untested):** unzip `pocket-<version>-windows-x64.zip` and run `pocket.exe`. If Windows says it protected your PC, click More info → Run anyway. It's attached a little after the Mac files, if it built.
+
           Playing together needs everyone on this same release.
           EOF
           gh release create "$GITHUB_REF_NAME" dist/*.zip dist/pocket-*.tar.gz --title "Infinite Pocket ${GITHUB_REF_NAME#v}" --notes-file notes.md --generate-notes
@@ -77,3 +80,46 @@ jobs:
           git add Formula/pocket.rb
           git commit -m "pocket $v"
           git push
+
+  # Beta: nobody has played it on Windows yet. Built beside the Mac one;
+  # when it fails, the Mac release goes out without it.
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release
+      - name: The build knows it is this release
+        run: |
+          got=$(./target/release/pocket.exe version)
+          if [ "v$got" != "$GITHUB_REF_NAME" ]; then
+            echo "the build says $got, the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - name: Zip
+        run: |
+          mkdir dist
+          7z a "dist/pocket-${GITHUB_REF_NAME#v}-windows-x64.zip" ./target/release/pocket.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+
+  windows-release:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" pocket-*-windows-x64.zip --repo "$GITHUB_REPOSITORY"

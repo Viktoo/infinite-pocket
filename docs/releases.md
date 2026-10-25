@@ -104,4 +104,7 @@ It never updates by itself.
 ## Not done
 
 - Signing and notarizing.
-- Intel Mac, Windows and Linux builds.
+- Intel Mac and Linux builds.
+- Trying the Windows build on Windows. The `windows` job builds it beside the Mac one
+  and attaches `pocket-<version>-windows-x64.zip` (the bare `pocket.exe`) to the
+  release; if it fails, the release goes out without it.
