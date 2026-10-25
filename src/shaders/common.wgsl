@@ -43,7 +43,7 @@ struct Globals {
 struct Inst {
   pos_scale: vec4f,   // world position, scale
   rot: vec4f,         // cos, sin, bounding radius, fade 0..1
-  tilt: vec4f,        // xyz of a unit quaternion (w >= 0 implied) applied after the yaw; 0 = upright
+  tilt: vec4f,        // xyz of a unit quaternion (w >= 0 implied) applied after the yaw; 0 = upright; w: the holes, as bits (see `GpuInst::set_holes`)
   k0: vec4f,          // seed, scale, a, b
   k1: vec4f,          // c, d, e, f
   s0: vec4f,          // live state s0..s3
@@ -53,7 +53,6 @@ struct Inst {
   info: vec4u,        // type id, sphere centre y, box half-extents x/z
   cuts: array<vec4f, 4>, // local centre, size (>0 sphere radius, <0 cube half-size, 0 none)
   look: array<vec4f, 5>, // look sliders g..z
-  more: vec4u,        // in the frame's holes: cuts past the four (first, how many), bores (first, how many; two each)
 }
 
 struct Params { seed: f32, scale: f32, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32,

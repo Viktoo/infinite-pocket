@@ -75,13 +75,17 @@ fn shape_sdf(i: Inst, lp: vec3f) -> f32 {
     if (cut.w != 0.0) { d = max(d, -cut_sdf(cut, lp)); }
   }
   // Its many small holes only matter right at its surface: further out the
-  // distance without them is still a safe step.
-  if ((i.more.y > 0u || i.more.w > 0u) && d < 0.05) {
-    for (var c = 0u; c < i.more.y; c = c + 1u) {
-      d = max(d, -cut_sdf(hole(i.more.x + c), lp));
+  // distance without them is still a safe step. Where they are rides in
+  // the tilt's spare w: start << 13 | cuts << 7 | bores.
+  let hb = bitcast<u32>(i.tilt.w);
+  if (hb != 0u && d < 0.05) {
+    let at = hb >> 13u;
+    let cuts = (hb >> 7u) & 63u;
+    for (var c = 0u; c < cuts; c = c + 1u) {
+      d = max(d, -cut_sdf(hole(at + c), lp));
     }
-    for (var c = 0u; c < i.more.w; c = c + 1u) {
-      d = max(d, -bore_sdf(hole(i.more.z + c * 2u), hole(i.more.z + c * 2u + 1u), lp));
+    for (var c = 0u; c < (hb & 127u); c = c + 1u) {
+      d = max(d, -bore_sdf(hole(at + cuts + c * 2u), hole(at + cuts + c * 2u + 1u), lp));
     }
   }
   return d;

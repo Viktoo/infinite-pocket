@@ -223,6 +223,12 @@ impl Thing {
         self.shape.cuts.get(crate::render::MAX_CUTS..).unwrap_or(&[])
     }
 
+    /// Those and its bores, for its CPU shape; None (no allocation) when it has neither.
+    pub fn holes(&self) -> Option<std::sync::Arc<crate::world::Holes>> {
+        let cuts = self.more_cuts();
+        (!cuts.is_empty() || !self.shape.bores.is_empty()).then(|| std::sync::Arc::new(crate::world::Holes { cuts: cuts.to_vec(), bores: self.shape.bores.clone() }))
+    }
+
     /// Held or worn: not lying about.
     pub fn held(&self) -> bool {
         self.holder.is_some() || self.worn.is_some()

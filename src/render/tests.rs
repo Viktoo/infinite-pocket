@@ -218,11 +218,10 @@ fn many_holes_and_bores_agree_on_gpu_and_cpu() {
     let bores = [[-2.0, 4.0, 0.0, 0.3, 2.0, 4.5, 0.0, 0.0], [0.0, 1.0, -2.0, 0.25, 0.0, 1.5, 2.0, 0.0]];
     let mut holes = more.clone();
     holes.extend(bores.iter().flat_map(|b| [[b[0], b[1], b[2], b[3]], [b[4], b[5], b[6], b[7]]]));
-    inst.more = [0, more.len() as u32, more.len() as u32, bores.len() as u32];
+    inst.set_holes(0, more.len(), bores.len());
     let entry = std::sync::Arc::new(crate::world::TypeEntry { id: tid, ct: std::sync::Arc::new(ty.clone()), builtin: true, solid: true, bottom: 0.0, top: 0.0, sphere_cy: 0.0, sphere_r: 0.0 });
     let mut solid = crate::world::Solid::new(inst, entry);
-    solid.more = more.as_slice().into();
-    solid.bores = bores.as_slice().into();
+    solid.holes = Some(std::sync::Arc::new(crate::world::Holes { cuts: more.clone(), bores: bores.to_vec() }));
     let pts = crate::lang::probe::sample_points(ty.meta.bounds);
     let input: Vec<[f32; 4]> = pts.iter().map(|p| [p[0], p[1], p[2], 0.0]).collect();
     let out = gpu.probe_holed(&pipe, &probe_globals(&terrain), &[0], &[0], 0, tid, &inst, &holes, &input).unwrap();

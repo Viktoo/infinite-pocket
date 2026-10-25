@@ -90,7 +90,7 @@ pub const FLAG_MARCH_ONLY: u32 = 16;
 /// Debug: no ambient occlusion or open-sky test.
 pub const FLAG_NO_AO: u32 = 32;
 
-/// One instance as the shader sees it (304 bytes).
+/// One instance as the shader sees it (288 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug, Default)]
 pub struct GpuInst {
@@ -116,16 +116,13 @@ pub struct GpuInst {
     pub cuts: [[f32; 4]; MAX_CUTS],
     /// Look sliders six onward, k.g … k.z.
     pub look: [[f32; 4]; 5],
-    /// In the frame's holes (see `FrameRequest::holes`): where its cuts past
-    /// the first `MAX_CUTS` start and how many, then where its bores start
-    /// and how many (two entries each).
-    pub more: [u32; 4],
 }
 
 /// Cuts kept in each instance; more go in the frame's shared holes.
 pub const MAX_CUTS: usize = 4;
-/// The most cuts one thing keeps (holes past it merge with the nearest).
+/// The most cuts, and bores, one thing keeps (cuts past it merge with the nearest).
 pub const MAX_HOLES: usize = 64;
+const _: () = assert!(MAX_HOLES - MAX_CUTS < 64 && MAX_HOLES < 128, "the counts fit their bits (see `set_holes`)");
 
 /// The distance to one cut (local units); twin of `cut_sdf` in scene.wgsl.
 pub fn cut_sdf(c: &[f32; 4], p: [f32; 3]) -> f32 {
@@ -236,7 +233,20 @@ impl GpuInst {
     pub fn set_tilt(&mut self, q: Quat) {
         let q = q.normalize();
         let q = if q.w < 0.0 { -q } else { q };
-        self.tilt = if q.xyz().length_squared() < 1e-10 { [0.0; 4] } else { [q.x, q.y, q.z, 0.0] };
+        let holes = self.tilt[3];
+        self.tilt = if q.xyz().length_squared() < 1e-10 { [0.0, 0.0, 0.0, holes] } else { [q.x, q.y, q.z, holes] };
+    }
+    /// Its cuts past the first `MAX_CUTS` and its bores (two entries each),
+    /// in the frame's holes (see `FrameRequest::holes`): where they start,
+    /// how many cuts, how many bores. Kept in the tilt's spare w, as bits:
+    /// start << 13 | cuts << 7 | bores.
+    pub fn set_holes(&mut self, at: usize, cuts: usize, bores: usize) {
+        let (cuts, bores) = (cuts.min(MAX_HOLES - MAX_CUTS), bores.min(MAX_HOLES));
+        self.tilt[3] = f32::from_bits(((at as u32) << 13) | ((cuts as u32) << 7) | bores as u32);
+    }
+    pub fn holes(&self) -> (usize, usize, usize) {
+        let b = self.tilt[3].to_bits();
+        ((b >> 13) as usize, ((b >> 7) & 63) as usize, (b & 127) as usize)
     }
     /// The yaw turn of a local offset (no tilt, no scale).
     fn yaw_out(&self, l: Vec3) -> Vec3 {

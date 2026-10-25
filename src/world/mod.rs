@@ -442,9 +442,15 @@ pub struct Solid {
     pub inst: GpuInst,
     pub ty: Arc<TypeEntry>,
     /// Cuts past the instance's own few, and bores (a live thing shot
-    /// full of holes).
-    pub more: Arc<[[f32; 4]]>,
-    pub bores: Arc<[[f32; 8]]>,
+    /// full of holes); None for nearly everything, at no cost.
+    pub holes: Option<Arc<Holes>>,
+}
+
+/// A shape's cuts past its instance's own few, and its bores (see `Solid`).
+#[derive(Debug, Default)]
+pub struct Holes {
+    pub cuts: Vec<[f32; 4]>,
+    pub bores: Vec<[f32; 8]>,
 }
 
 impl Solid {
@@ -470,18 +476,16 @@ impl Solid {
     /// only lower bounds: too small for a wide body passing close).
     pub fn exact_sdf(&self, p: Vec3) -> f32 {
         let d = self.inst.sdf(&self.ty.ct, p);
-        if self.more.is_empty() && self.bores.is_empty() {
-            return d;
-        }
+        let Some(h) = &self.holes else { return d };
         let lp = self.inst.to_local(p);
         let s = self.inst.pos_scale[3];
-        let d = self.more.iter().fold(d, |d, c| d.max(-crate::render::cut_sdf(c, lp) * s));
-        self.bores.iter().fold(d, |d, c| d.max(-crate::render::bore_sdf(c, lp) * s))
+        let d = h.cuts.iter().fold(d, |d, c| d.max(-crate::render::cut_sdf(c, lp) * s));
+        h.bores.iter().fold(d, |d, c| d.max(-crate::render::bore_sdf(c, lp) * s))
     }
 
     /// A placed or scattered shape: no cuts past its own.
     pub fn new(inst: GpuInst, ty: Arc<TypeEntry>) -> Solid {
-        Solid { inst, ty, more: Arc::new([]), bores: Arc::new([]) }
+        Solid { inst, ty, holes: None }
     }
 }
 

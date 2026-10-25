@@ -796,8 +796,7 @@ impl Sim {
                 continue;
             }
             let mut s = Solid::new(gi, ty.clone());
-            s.more = t.more_cuts().into();
-            s.bores = t.shape.bores.as_slice().into();
+            s.holes = t.holes();
             out.push(s);
         }
         out
