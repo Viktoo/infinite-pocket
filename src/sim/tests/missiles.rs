@@ -199,11 +199,12 @@ fn a_grenade_lit_and_thrown_blows_out_a_crater() {
     let p = flat_spot(&w, 30.0);
     let gi = place(&w, grenade, p + Vec3::new(0.5, 0.0, 0.0), 0.0);
     let spot = ground(&w, p.x, p.z + 9.0);
-    let cid = add_char(&w, "Bo", "brave", &[], spot + Vec3::new(1.5, 0.0, 0.0));
-    let bi = place(&w, ball, spot + Vec3::new(-1.2, 0.0, 0.0), 0.0);
+    // Bo stands a little past where it lands, where it rolls on to.
+    let cid = add_char(&w, "Bo", "brave", &[], spot + Vec3::new(1.5, 0.0, 3.0));
+    let bi = place(&w, ball, spot + Vec3::new(-1.2, 0.0, 3.0), 0.0);
     let mut s = session(&w, 74, None);
     s.sim.player.pos = p;
-    s.sim.cast.get_mut(cid).unwrap().a.pos = ground(&w, spot.x + 1.5, spot.z);
+    s.sim.cast.get_mut(cid).unwrap().a.pos = ground(&w, spot.x + 1.5, spot.z + 3.0);
     act_once(&mut s, ActorId::Player, Action::Hold { target: Target::Instance(gi) }, 0.3);
     let id = s.sim.player.held.unwrap();
     let r = act_once(&mut s, ActorId::Player, Action::Use { target: Some(Target::Thing(id)), on: None, at: None }, 0.05);

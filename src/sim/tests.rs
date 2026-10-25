@@ -5334,3 +5334,22 @@ fn the_moon_has_low_gravity_and_no_air() {
     assert!(!b.gasping && b.props[P_HEALTH] > 0.99, "Ben breathes from his tank: health {:.2}", b.props[P_HEALTH]);
     assert!(s.sim.body_line(ada).is_some_and(|l| l.contains("no air")), "Ada's planner is told: {:?}", s.sim.body_line(ada));
 }
+
+/// A bullet that shatters on what it hits leaves pieces that scatter and
+/// come to rest, not ones still going at its speed (they'd whoosh forever).
+#[test]
+fn a_shattered_bullet_settles() {
+    let w = world_with("shards", 65, bare());
+    let c = add_type(&w, "export const meta = { name: \"cartridge\", bounds: [0.008, 0.008, 0.043], tags: [\"item\", \"ammo\", \"metal\"], props: { mass: 0.022, fragile: 0.05 } };\nexport function sdf(x, y, z, k) { return box(x, y, z, 0.008, 0.008, 0.043); }\nexport function color(x, y, z, k) { return rgb(180, 150, 60); }\n");
+    let p = flat_spot(&w, 30.0);
+    let ci = place(&w, c, p + Vec3::new(0.0, 0.0, 2.0), 0.0);
+    let mut s = session(&w, 65, None);
+    s.sim.player.pos = p;
+    let id = s.sim.liven(&Target::Instance(ci)).unwrap();
+    s.sim.things.get_mut(id).unwrap().vel = Vec3::new(0.0, 0.0, 700.0);
+    s.sim.impact(id, 700.0, None);
+    assert!(s.sim.things.get(id).is_none(), "it broke");
+    s.run(3.0, 0.05);
+    let pieces: Vec<_> = s.sim.things.live().collect();
+    assert!(!pieces.is_empty() && pieces.iter().all(|t| t.asleep && (t.pos - p).length() < 10.0), "the pieces lie near where it broke");
+}

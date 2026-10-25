@@ -530,11 +530,15 @@ impl Sim {
             })
             .collect();
         let terrain = &self.snap.terrain;
+        let above = |q: Vec3| (q.y - r - terrain.floor(q.x, q.y + r * 0.5, q.z)) * 0.6;
+        // Already on the ground (sliding along it): the ground is met after
+        // the step, not swept for, or it never leaves where it lies.
+        let on_ground = above(from) <= 0.0;
         let mut s = 0.0f32;
         for _ in 0..160 {
             let q = from + dir * s;
             // The ground: how far above it, taken short (it slopes).
-            let mut gap = (q.y - r - terrain.floor(q.x, q.y + r * 0.5, q.z)) * 0.6;
+            let mut gap = if on_ground { f32::MAX } else { above(q) };
             for so in &solids {
                 gap = gap.min(so.sdf(q) - r);
             }
@@ -699,7 +703,8 @@ impl Sim {
             let mut piece = super::things::Thing::new(nid, &ty, t.pos + out * 0.04, t.yaw, t.scale, t.params, p, self.t);
             piece.set_tilt(t.tilt());
             piece.shape.cuts = cuts;
-            piece.vel = t.vel * 0.4 + out * (0.8 + self.rand() * 0.8) + Vec3::Y * (0.6 + self.rand() * 0.6);
+            // What smashed it took its speed: the pieces only scatter.
+            piece.vel = (t.vel * 0.4).clamp_length_max(4.0) + out * (0.8 + self.rand() * 0.8) + Vec3::Y * (0.6 + self.rand() * 0.6);
             piece.asleep = false;
             piece.anchored = false;
             piece.origin.made_from = vec![ty.name().to_string()];
