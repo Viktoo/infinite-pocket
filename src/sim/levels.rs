@@ -73,7 +73,7 @@ pub fn levels_of(snap: &WorldSnapshot, climbs: &[super::climb::Climb], rooms: &[
         .iter()
         .filter_map(|p| {
             let ty = snap.type_of(p.type_id)?;
-            (ty.solid && ty.ct.meta.joint.is_none()).then(|| Solid { inst: p.gpu(ty, 1.0), ty: ty.clone() })
+            (ty.solid && ty.ct.meta.joint.is_none()).then(|| Solid::new(p.gpu(ty, 1.0), ty.clone()))
         })
         .collect();
     let mut pairs: Vec<(Vec3, Vec3, f32)> = Vec::new();

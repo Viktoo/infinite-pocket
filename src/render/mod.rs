@@ -90,7 +90,7 @@ pub const FLAG_MARCH_ONLY: u32 = 16;
 /// Debug: no ambient occlusion or open-sky test.
 pub const FLAG_NO_AO: u32 = 32;
 
-/// One instance as the shader sees it (288 bytes).
+/// One instance as the shader sees it (304 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, Debug, Default)]
 pub struct GpuInst {
@@ -116,9 +116,16 @@ pub struct GpuInst {
     pub cuts: [[f32; 4]; MAX_CUTS],
     /// Look sliders six onward, k.g … k.z.
     pub look: [[f32; 4]; 5],
+    /// In the frame's holes (see `FrameRequest::holes`): where its cuts past
+    /// the first `MAX_CUTS` start and how many, then where its bores start
+    /// and how many (two entries each).
+    pub more: [u32; 4],
 }
 
+/// Cuts kept in each instance; more go in the frame's shared holes.
 pub const MAX_CUTS: usize = 4;
+/// The most cuts one thing keeps (holes past it merge with the nearest).
+pub const MAX_HOLES: usize = 64;
 
 /// The distance to one cut (local units); twin of `cut_sdf` in scene.wgsl.
 pub fn cut_sdf(c: &[f32; 4], p: [f32; 3]) -> f32 {
@@ -131,6 +138,15 @@ pub fn cut_sdf(c: &[f32; 4], p: [f32; 3]) -> f32 {
         let o = (q[0].max(0.0).powi(2) + q[1].max(0.0).powi(2) + q[2].max(0.0).powi(2)).sqrt();
         o + q[0].max(q[1]).max(q[2]).min(0.0)
     }
+}
+
+/// The distance to a bore (local units): a tube from `a` to `b`, radius
+/// `a[3]`; twin of `bore_sdf` in scene.wgsl.
+pub fn bore_sdf(c: &[f32; 8], p: [f32; 3]) -> f32 {
+    let (a, b, p) = (Vec3::new(c[0], c[1], c[2]), Vec3::new(c[4], c[5], c[6]), Vec3::from(p));
+    let (pa, ba) = (p - a, b - a);
+    let h = (pa.dot(ba) / ba.length_squared().max(1e-8)).clamp(0.0, 1.0);
+    (pa - ba * h).length() - c[3]
 }
 
 /// A shape's local distance with its cuts taken out.
@@ -553,6 +569,9 @@ pub struct FrameRequest {
     pub height: u32,
     pub globals: Globals,
     pub instances: Vec<GpuInst>,
+    /// Cuts past each instance's own few, and its bores (two entries
+    /// each), which its `more` points into.
+    pub holes: Vec<[f32; 4]>,
     pub grid: Option<Grid>,
     pub scene: Arc<crate::world::SceneTypes>,
     /// Used by the CPU renderer (the GPU gets everything via `globals`).

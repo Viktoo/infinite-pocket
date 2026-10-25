@@ -674,7 +674,7 @@ fn render_once(l: &Loaded, mut cam: render::Camera, w: u32, h: u32, pixel_aspect
     let light = render::sky::lighting(t_game, &snap.look.palette);
     let sp = render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: w, height: h, pixel_aspect, light, time: 0.0, frame: 0, shadows: l.gpu.is_some() && std::env::var("POCKET_NO_SHADOWS").is_err(), lights: &drawn.lights, weather: render::WeatherView::of(&live.wx, 0.0, !live.open_sky(cam.pos)) };
     let globals = render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = render::FrameRequest { id: 1, width: w, height: h, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = render::FrameRequest { id: 1, width: w, height: h, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match &l.gpu {
         Some(g) => render::gpu::spawn(g.clone()),
         None => render::cpu::spawn(),
@@ -859,7 +859,7 @@ fn gpubench(args: &[String]) -> Result<()> {
         // CPU, so its clock stays where play would put it.
         let send = |id: &mut u64| -> Result<()> {
             *id += 1;
-            let req = render::FrameRequest { id: *id, width: pw, height: ph, globals: g, instances: culled.insts.clone(), grid: culled.grid.clone(), scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+            let req = render::FrameRequest { id: *id, width: pw, height: ph, globals: g, instances: culled.insts.clone(), holes: Vec::new(), grid: culled.grid.clone(), scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
             handle.tx.send(render::RenderMsg::Frame(Box::new(req)))?;
             Ok(())
         };
@@ -904,7 +904,7 @@ fn gpubench(args: &[String]) -> Result<()> {
             let (f, out) = if i % 2 == 0 { (base, &mut ta) } else { (base | ab, &mut tb) };
             let mut g = globals;
             g.dims[3] = f;
-            let req = render::FrameRequest { id: 10_000 + i, width: pw, height: ph, globals: g, instances: culled.insts.clone(), grid: culled.grid.clone(), scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+            let req = render::FrameRequest { id: 10_000 + i, width: pw, height: ph, globals: g, instances: culled.insts.clone(), holes: Vec::new(), grid: culled.grid.clone(), scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
             handle.tx.send(render::RenderMsg::Frame(Box::new(req)))?;
             let f = handle.rx.recv_timeout(Duration::from_secs(10))?;
             if i >= 40 {

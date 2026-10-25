@@ -231,7 +231,7 @@ fn frame(sim: &mut Sim, handle: &mut render::RenderHandle, cam: Camera, plan: &P
         weather: render::WeatherView::of(&sim.wx, 0.0, !sim.open_sky(cam.pos)),
     };
     let globals = render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = FrameRequest { id: i as u64 + 1, width: w, height: h, globals, instances: culled.insts, grid: culled.grid, scene: sim.snap.scene.clone(), terrain: sim.snap.terrain.clone(), look: sim.snap.look.clone() };
+    let req = FrameRequest { id: i as u64 + 1, width: w, height: h, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: sim.snap.scene.clone(), terrain: sim.snap.terrain.clone(), look: sim.snap.look.clone() };
     handle.tx.send(RenderMsg::Frame(Box::new(req)))?;
     let f = handle.rx.recv_timeout(Duration::from_secs(120)).context("render timed out")?;
     if f.width == 0 {

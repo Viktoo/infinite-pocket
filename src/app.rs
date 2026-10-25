@@ -1684,6 +1684,7 @@ impl App {
             height: ph,
             globals,
             instances: culled.insts,
+            holes: drawn.holes,
             grid: culled.grid,
             scene: self.snap.scene.clone(),
             terrain: self.snap.terrain.clone(),

@@ -540,7 +540,7 @@ impl ScatterCache {
                         continue;
                     }
                     if let Some(ty) = snap.type_of(it.inst.info[0]) {
-                        out.push(Solid { inst: it.inst, ty: ty.clone() });
+                        out.push(Solid::new(it.inst, ty.clone()));
                     }
                 }
                 if let Some(v) = snap.by_chunk.get(&cc) {
@@ -554,7 +554,7 @@ impl ScatterCache {
                         if (gi.center() - p).length() - gi.radius() > radius {
                             continue;
                         }
-                        out.push(Solid { inst: gi, ty: ty.clone() });
+                        out.push(Solid::new(gi, ty.clone()));
                     }
                 }
             }

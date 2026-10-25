@@ -24,7 +24,7 @@ struct Globals {
   biomes: array<vec4f, 18>, // per biome: (cx, cy, base, amp), (rough, g1), (g2, cliffs)
   lights: array<vec4f, 8>,     // point lights: position, intensity
   light_cols: array<vec4f, 8>, // colour, reach (m)
-  extra: vec4u,       // hollows, cave parts, -, -
+  extra: vec4u,       // hollows, cave parts, where the holes start in items, -
   hollows: array<vec4f, 64>,   // per hollow: (cx, cz, cos, sin), (hx, hz, floor, ±edge: + round, - box)
   // weather: 0 (cover, drift x, drift z, cloud height), 1 (cloud rgb, flash),
   // 2 (falls rgb, amount), 3 (wind dir x, z, wind, falls look), 4 (soak, dusk,
@@ -53,6 +53,7 @@ struct Inst {
   info: vec4u,        // type id, sphere centre y, box half-extents x/z
   cuts: array<vec4f, 4>, // local centre, size (>0 sphere radius, <0 cube half-size, 0 none)
   look: array<vec4f, 5>, // look sliders g..z
+  more: vec4u,        // in the frame's holes: cuts past the four (first, how many), bores (first, how many; two each)
 }
 
 struct Params { seed: f32, scale: f32, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32,

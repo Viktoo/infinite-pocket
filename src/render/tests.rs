@@ -203,6 +203,46 @@ fn cuts_agree_on_gpu_and_cpu() {
     assert!(worst <= crate::model::PARITY_TOL, "GPU/CPU cut mismatch {worst:e}");
 }
 
+/// Holes past an instance's own cuts, and bores through it, take the same
+/// pieces out on the GPU as on the CPU.
+#[test]
+fn many_holes_and_bores_agree_on_gpu_and_cpu() {
+    let Ok(gpu) = Gpu::new() else { return };
+    let types = all_types();
+    let refs: Vec<(u32, &CompiledType)> = types.iter().map(|(i, t)| (*i, t)).collect();
+    let pipe = gpu.build_pipeline(&shader::assemble(&refs), 2).unwrap();
+    let terrain = crate::terrain::Terrain::new(7, default_biomes());
+    let (tid, ty) = types.iter().find(|(i, _)| *i == 100).map(|(i, t)| (*i, t.clone())).unwrap();
+    let mut inst = GpuInst { pos_scale: [0.0, 0.0, 0.0, 1.0], rot: [1.0, 0.0, 0.0, 1.0], k0: [0.37, 1.0, 0.5, 0.5], k1: [0.5; 4], ..Default::default() };
+    let more: Vec<[f32; 4]> = (0..6).map(|i| [0.3 * i as f32 - 0.8, 2.0 + i as f32, 0.6, 0.35]).collect();
+    let bores = [[-2.0, 4.0, 0.0, 0.3, 2.0, 4.5, 0.0, 0.0], [0.0, 1.0, -2.0, 0.25, 0.0, 1.5, 2.0, 0.0]];
+    let mut holes = more.clone();
+    holes.extend(bores.iter().flat_map(|b| [[b[0], b[1], b[2], b[3]], [b[4], b[5], b[6], b[7]]]));
+    inst.more = [0, more.len() as u32, more.len() as u32, bores.len() as u32];
+    let entry = std::sync::Arc::new(crate::world::TypeEntry { id: tid, ct: std::sync::Arc::new(ty.clone()), builtin: true, solid: true, bottom: 0.0, top: 0.0, sphere_cy: 0.0, sphere_r: 0.0 });
+    let mut solid = crate::world::Solid::new(inst, entry);
+    solid.more = more.as_slice().into();
+    solid.bores = bores.as_slice().into();
+    let pts = crate::lang::probe::sample_points(ty.meta.bounds);
+    let input: Vec<[f32; 4]> = pts.iter().map(|p| [p[0], p[1], p[2], 0.0]).collect();
+    let out = gpu.probe_holed(&pipe, &probe_globals(&terrain), &[0], &[0], 0, tid, &inst, &holes, &input).unwrap();
+    let k = inst.k();
+    let (mut worst, mut changed) = (0.0f32, 0);
+    for (p, g) in pts.iter().zip(&out) {
+        let plain = ty.sdf(*p, &k);
+        let c = solid.exact_sdf(Vec3::from(*p));
+        if c > plain + 1e-4 {
+            changed += 1;
+        }
+        // Away from the surface the GPU leaves the holes out (a safe step).
+        if plain < 0.05 {
+            worst = worst.max((g[0] - c).abs() / c.abs().max(1.0));
+        }
+    }
+    assert!(changed > 3, "the holes remove something ({changed} points)");
+    assert!(worst <= crate::model::PARITY_TOL, "GPU/CPU hole mismatch {worst:e}");
+}
+
 /// A tilted, turned, scaled shape is the same shape on the GPU and the CPU,
 /// and so is ground taken away by a hollow.
 #[test]
@@ -342,7 +382,7 @@ fn renders_a_frame_quickly() {
     let mut handle = gpu::spawn(gpu.clone());
     let mut times = Vec::new();
     for i in 0..20 {
-        let req = FrameRequest { id: i, width: w, height: hgt, globals: build_globals(&sp, 1, None), instances: vec![inst], grid: None, scene: scene.clone(), terrain: std::sync::Arc::new(terrain.clone()), look: Default::default() };
+        let req = FrameRequest { id: i, width: w, height: hgt, globals: build_globals(&sp, 1, None), instances: vec![inst], holes: Vec::new(), grid: None, scene: scene.clone(), terrain: std::sync::Arc::new(terrain.clone()), look: Default::default() };
         handle.tx.send(RenderMsg::Frame(Box::new(req))).unwrap();
         let f = handle.rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap();
         assert_eq!(f.pixels.len(), (w * hgt) as usize);

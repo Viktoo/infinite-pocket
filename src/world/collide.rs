@@ -430,7 +430,7 @@ mod tests {
         let terrain = Terrain::new(1, crate::terrain::default_biomes());
         let c = Vec3::new(500.0, 0.0, 500.0);
         let inst = GpuInst { pos_scale: [c.x, terrain.height(c.x, c.z) + 1.0, c.z, 1.0], rot: [1.0, 0.0, ty.radius(), 1.0], ..Default::default() };
-        let solids = vec![Solid { inst, ty }];
+        let solids = vec![Solid::new(inst, ty)];
         let obs = Obstacles { solids: &solids, bodies: &[] };
         // Standing inside: walking forward must work until we are out.
         let mut p = Vec3::new(c.x + 0.5, terrain.height(c.x, c.z), c.z);
@@ -468,7 +468,7 @@ mod tests {
             rot: [1.0, 0.0, ty.radius(), 1.0],
             ..Default::default()
         };
-        let solids = vec![Solid { inst, ty }];
+        let solids = vec![Solid::new(inst, ty)];
         let obs = Obstacles { solids: &solids, bodies: &[] };
         let mut p = Vec3::new(base.x, terrain.height(base.x, base.z), base.z);
         // Walk straight at the wall (+z), slightly diagonally.

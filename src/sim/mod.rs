@@ -795,7 +795,10 @@ impl Sim {
             if (gi.center() - p).length() - gi.radius() > r {
                 continue;
             }
-            out.push(Solid { inst: gi, ty: ty.clone() });
+            let mut s = Solid::new(gi, ty.clone());
+            s.more = t.more_cuts().into();
+            s.bores = t.shape.bores.as_slice().into();
+            out.push(s);
         }
         out
     }

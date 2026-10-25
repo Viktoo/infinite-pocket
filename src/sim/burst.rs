@@ -290,7 +290,7 @@ impl Sim {
             if !ty.solid || ty.ct.meta.body.is_some() {
                 continue;
             }
-            let s = crate::world::Solid { inst: q.gpu(ty, 1.0), ty: ty.clone() };
+            let s = crate::world::Solid::new(q.gpu(ty, 1.0), ty.clone());
             if (s.inst.center() - p).length() - s.inst.radius() > reach {
                 continue;
             }
@@ -307,7 +307,7 @@ impl Sim {
             if !ty.solid || ty.radius() * t.scale < 0.3 {
                 continue;
             }
-            let s = crate::world::Solid { inst: super::render::thing_inst(t, ty, [0.0; 4]), ty: ty.clone() };
+            let s = super::render::thing_solid(t, ty.clone());
             if (s.inst.center() - p).length() - s.inst.radius() > reach {
                 continue;
             }
@@ -320,7 +320,7 @@ impl Sim {
             if !ty.solid || ty.radius() * it.inst.pos_scale[3] < 0.3 {
                 continue;
             }
-            let s = crate::world::Solid { inst: it.inst, ty: ty.clone() };
+            let s = crate::world::Solid::new(it.inst, ty.clone());
             if let Some((d, at)) = near(&s) {
                 out.push((d, Target::Cell([it.cell.0, it.cell.1]), at));
             }

@@ -6,10 +6,9 @@
 //! that only this thing uses. Every change goes into the thing's history.
 
 use super::props::*;
-use super::render::thing_inst;
 use super::things::ThingId;
 use super::{ActorId, Note, Request, Sim};
-use crate::render::MAX_CUTS;
+use crate::render::MAX_HOLES;
 use crate::world::Solid;
 use glam::Vec3;
 use serde_json::json;
@@ -18,7 +17,7 @@ use serde_json::json;
 fn solid_of(s: &Sim, id: ThingId) -> Option<Solid> {
     let t = s.things.get(id)?;
     let ty = s.snap.type_of(t.type_id)?.clone();
-    Some(Solid { inst: thing_inst(t, &ty, [0.0; 4]), ty })
+    Some(super::render::thing_solid(t, ty))
 }
 
 fn normal(s: &Solid, p: Vec3) -> Vec3 {
@@ -94,12 +93,43 @@ impl Sim {
         }))
     }
 
+    /// Bore a straight hole through a thing from `a` to `b` (world), of
+    /// radius `r` (m): a shot through a plank. False when it holds as many
+    /// as it can show.
+    pub fn bore(&mut self, id: ThingId, a: Vec3, b: Vec3, r: f32) -> bool {
+        let Some(solid) = solid_of(self, id) else { return false };
+        let s = solid.inst.pos_scale[3].max(0.01);
+        let (la, lb) = (to_local(&solid, a), to_local(&solid, b));
+        let Some(x) = self.things.get_mut(id) else { return false };
+        if x.shape.bores.len() >= MAX_HOLES {
+            return false;
+        }
+        x.shape.bores.push([la.x, la.y, la.z, r / s, lb.x, lb.y, lb.z, 0.0]);
+        x.asleep = false;
+        x.dirty = true;
+        true
+    }
+
+    /// How far a line from `at` along `dir` runs inside a thing before it
+    /// comes out again, up to `max` (m); None if it stays inside.
+    pub fn through(&self, id: ThingId, at: Vec3, dir: Vec3, max: f32) -> Option<f32> {
+        let solid = solid_of(self, id)?;
+        let mut t = 0.01;
+        while t < max {
+            if solid.exact_sdf(at + dir * t) > 0.0 {
+                return Some(t);
+            }
+            t += 0.02;
+        }
+        None
+    }
+
     /// Whether a small cut at `at` (world) shows: there is room for one
     /// more, or one already near enough to grow into. Blows spread over a
     /// whole wall leave as many holes as it can show, not one great gap.
     pub fn cut_fits(&self, id: ThingId, at: Vec3, size: f32) -> bool {
         let (Some(t), Some(solid)) = (self.things.get(id), solid_of(self, id)) else { return false };
-        if t.shape.cuts.len() < crate::render::MAX_CUTS {
+        if t.shape.cuts.len() < MAX_HOLES {
             return true;
         }
         let c = to_local(&solid, at);
@@ -126,7 +156,7 @@ impl Sim {
         let by = self.actor_name(who);
         let t = self.t;
         let Some(x) = self.things.get_mut(id) else { return Err("it's gone".into()) };
-        if x.shape.cuts.len() >= MAX_CUTS {
+        if x.shape.cuts.len() >= MAX_HOLES {
             // Merge with the nearest cut into one sphere that covers both.
             let (i, _) = x
                 .shape

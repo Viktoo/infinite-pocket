@@ -144,16 +144,25 @@ impl Gpu {
     /// `probe` with the ground edits' tiles (`ground::Pack::words`, matching `globals.ground`).
     #[allow(clippy::too_many_arguments)]
     pub fn probe_ground(&self, pipe: &ScenePipeline, globals: &Globals, ground: &[u32], lands: &[u32], mode: u32, tid: u32, inst: &GpuInst, points: &[[f32; 4]]) -> anyhow::Result<Vec<[f32; 4]>> {
+        self.probe_holed(pipe, globals, ground, lands, mode, tid, inst, &[], points)
+    }
+
+    /// `probe_ground` with the frame's holes the instance's `more` points into.
+    #[allow(clippy::too_many_arguments)]
+    pub fn probe_holed(&self, pipe: &ScenePipeline, globals: &Globals, ground: &[u32], lands: &[u32], mode: u32, tid: u32, inst: &GpuInst, holes: &[[f32; 4]], points: &[[f32; 4]]) -> anyhow::Result<Vec<[f32; 4]>> {
         use wgpu::BufferUsages as U;
         let n = points.len();
         let mut g = *globals;
         g.probe = [n as u32, mode, tid, 0];
+        g.extra[2] = 0;
         let ub = self.buf("probe-globals", std::mem::size_of::<Globals>() as u64, U::UNIFORM | U::COPY_DST);
         self.queue.write_buffer(&ub, 0, bytemuck::bytes_of(&g));
         let ib = self.buf("probe-inst", INST_BYTES, U::STORAGE | U::COPY_DST);
         self.queue.write_buffer(&ib, 0, bytemuck::bytes_of(inst));
         let cb = self.buf("probe-cells", 16, U::STORAGE);
-        let tb = self.buf("probe-items", 16, U::STORAGE);
+        let words: Vec<u32> = holes.iter().flat_map(|h| h.map(f32::to_bits)).chain([0; 4]).collect();
+        let tb = self.buf("probe-items", (words.len() * 4) as u64, U::STORAGE | U::COPY_DST);
+        self.queue.write_buffer(&tb, 0, bytemuck::cast_slice(&words));
         let ob = self.buf("probe-out", 16, U::STORAGE);
         let size = (n * 16) as u64;
         let pb = self.buf("probe-io", size, U::STORAGE | U::COPY_DST | U::COPY_SRC);
@@ -336,10 +345,13 @@ impl Renderer {
         let gpu = self.gpu.clone();
         let npx = (req.width * req.height) as u64;
         let insts: &[GpuInst] = if req.instances.is_empty() { &[GpuInst { info: [u32::MAX, 0, 0, 0], ..Default::default() }] } else { &req.instances };
-        let (cells, items): (Vec<[u32; 2]>, Vec<u32>) = match &req.grid {
+        let (cells, mut items): (Vec<[u32; 2]>, Vec<u32>) = match &req.grid {
             Some(g) if !g.cells.is_empty() => (g.cells.clone(), if g.items.is_empty() { vec![0] } else { g.items.clone() }),
             _ => (vec![[0, 0]], vec![0]),
         };
+        // The frame's holes ride after the items (no binding to spare).
+        let holes_at = items.len() as u32;
+        items.extend(req.holes.iter().flat_map(|h| h.map(f32::to_bits)));
         let mut dirty = self.bind.is_none();
         dirty |= Self::ensure(&gpu, &mut self.inst, &mut self.inst_cap, insts.len() as u64 * INST_BYTES, "inst", U::STORAGE | U::COPY_DST);
         dirty |= Self::ensure(&gpu, &mut self.cells, &mut self.cells_cap, (cells.len() * 8) as u64, "cells", U::STORAGE | U::COPY_DST);
@@ -381,6 +393,7 @@ impl Renderer {
         // Rebuild the camera-centred heightmap when the camera has moved far
         // enough from its centre or the terrain function changed.
         let mut globals = req.globals;
+        globals.extra[2] = holes_at;
         let (cx, cz) = (globals.cam_pos[0], globals.cam_pos[2]);
         let epoch = globals.seed[3];
         let half = HMAP_CELL * HMAP_N as f32 * 0.5;

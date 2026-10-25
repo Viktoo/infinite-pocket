@@ -759,7 +759,7 @@ fn png_hd(s: &mut Session, snap: &Arc<crate::world::WorldSnapshot>, gpu: &Option
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),

@@ -695,7 +695,7 @@ impl Sim {
             c[if axis == 0 { 2 } else { 0 }] = (self.rand() * 2.0 - 1.0) * b[2 - axis] * 0.6;
             cuts.push([c[0], c[1], c[2], r]);
             for o in &t.shape.cuts {
-                if cuts.len() < crate::render::MAX_CUTS {
+                if cuts.len() < crate::render::MAX_HOLES {
                     cuts.push(*o);
                 }
             }

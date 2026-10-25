@@ -46,6 +46,14 @@ pub fn thing_inst(t: &Thing, ty: &TypeEntry, fx: [f32; 4]) -> GpuInst {
     g
 }
 
+/// A live thing's shape as the CPU sees it, every cut included.
+pub fn thing_solid(t: &Thing, ty: std::sync::Arc<TypeEntry>) -> crate::world::Solid {
+    let mut s = crate::world::Solid::new(thing_inst(t, &ty, [0.0; 4]), ty);
+    s.more = t.more_cuts().into();
+    s.bores = t.shape.bores.as_slice().into();
+    s
+}
+
 /// How shut someone's eyes are at `t` (0 open … 1 shut): a blink every few
 /// seconds, each their own rhythm, now and then two together.
 pub fn blink(t: f64, id: i64) -> f32 {
@@ -73,6 +81,7 @@ pub fn layer_inst(wearer: &GpuInst, body: &TypeEntry, layer: &TypeEntry, fx: [f3
     g.fx = fx;
     g.fx[FX_HIGHLIGHT] = wearer.fx[FX_HIGHLIGHT];
     g.cuts = Default::default();
+    g.more = Default::default();
     g
 }
 
@@ -196,6 +205,8 @@ struct Marks {
 
 pub struct Drawn {
     pub insts: Vec<GpuInst>,
+    /// Cuts past each instance's own few (see `GpuInst::more`).
+    pub holes: Vec<[f32; 4]>,
     pub lights: Vec<PointLight>,
 }
 
@@ -250,6 +261,7 @@ impl Sim {
 
     fn draw_from(&self, cam: Vec3, view: f32, eye: Option<&crate::render::Camera>) -> Drawn {
         let mut insts = Vec::new();
+        let mut holes: Vec<[f32; 4]> = Vec::new();
         let mut lights: Vec<(f32, PointLight)> = Vec::new();
         let marks = self.work_marks();
         let breath = pulse(self.t);
@@ -405,7 +417,13 @@ impl Sim {
                 }
                 None => {
                     let fell = self.falling(t);
-                    let g = thing_inst(fell.as_ref().unwrap_or(t), ty, fx);
+                    let mut g = thing_inst(fell.as_ref().unwrap_or(t), ty, fx);
+                    let (more, bores) = (t.more_cuts(), &t.shape.bores);
+                    if !more.is_empty() || !bores.is_empty() {
+                        g.more = [holes.len() as u32, more.len() as u32, (holes.len() + more.len()) as u32, bores.len() as u32];
+                        holes.extend_from_slice(more);
+                        holes.extend(bores.iter().flat_map(|b| [[b[0], b[1], b[2], b[3]], [b[4], b[5], b[6], b[7]]]));
+                    }
                     insts.push(g);
                     // Remains wear what the living body wore.
                     if let Some(c) = t.origin.remains {
@@ -535,7 +553,7 @@ impl Sim {
             }
         }
         lights.sort_by(|a, b| a.0.total_cmp(&b.0));
-        Drawn { insts, lights: lights.into_iter().map(|x| x.1).take(crate::render::MAX_LIGHTS).collect() }
+        Drawn { insts, holes, lights: lights.into_iter().map(|x| x.1).take(crate::render::MAX_LIGHTS).collect() }
     }
 
     fn flame_type(&self) -> Option<&std::sync::Arc<TypeEntry>> {

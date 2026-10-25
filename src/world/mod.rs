@@ -441,6 +441,10 @@ impl WorldSnapshot {
 pub struct Solid {
     pub inst: GpuInst,
     pub ty: Arc<TypeEntry>,
+    /// Cuts past the instance's own few, and bores (a live thing shot
+    /// full of holes).
+    pub more: Arc<[[f32; 4]]>,
+    pub bores: Arc<[[f32; 8]]>,
 }
 
 impl Solid {
@@ -459,13 +463,25 @@ impl Solid {
         if db > 0.5 {
             return db;
         }
-        self.inst.sdf(&self.ty.ct, p)
+        self.exact_sdf(p)
     }
 
     /// The shape's own distance, without the bounding shortcuts (which are
     /// only lower bounds: too small for a wide body passing close).
     pub fn exact_sdf(&self, p: Vec3) -> f32 {
-        self.inst.sdf(&self.ty.ct, p)
+        let d = self.inst.sdf(&self.ty.ct, p);
+        if self.more.is_empty() && self.bores.is_empty() {
+            return d;
+        }
+        let lp = self.inst.to_local(p);
+        let s = self.inst.pos_scale[3];
+        let d = self.more.iter().fold(d, |d, c| d.max(-crate::render::cut_sdf(c, lp) * s));
+        self.bores.iter().fold(d, |d, c| d.max(-crate::render::bore_sdf(c, lp) * s))
+    }
+
+    /// A placed or scattered shape: no cuts past its own.
+    pub fn new(inst: GpuInst, ty: Arc<TypeEntry>) -> Solid {
+        Solid { inst, ty, more: Arc::new([]), bores: Arc::new([]) }
     }
 }
 

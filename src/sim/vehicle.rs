@@ -539,7 +539,7 @@ impl Sim {
     fn vehicle_solid(&self, id: ThingId) -> Option<Solid> {
         let t = self.things.get(id)?;
         let ty = self.snap.type_of(t.type_id)?.clone();
-        Some(Solid { inst: thing_inst(t, &ty, [0.0; 4]), ty })
+        Some(super::render::thing_solid(t, ty))
     }
 
     /// How far to lift the traveler's eye so it isn't inside the vehicle

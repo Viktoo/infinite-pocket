@@ -45,6 +45,10 @@ pub struct EditRec {
 pub struct Shape {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cuts: Vec<[f32; 4]>,
+    /// Straight holes along a line, in its local frame: from a.xyz to b.xyz,
+    /// radius a.w (a shot that went through a plank).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bores: Vec<[f32; 8]>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub edits: Vec<EditRec>,
     /// Lying tilted (x, y, z, w of a rotation after the yaw), when not upright.
@@ -94,7 +98,7 @@ fn is_zero(v: &f32) -> bool {
 
 impl Shape {
     pub fn is_empty(&self) -> bool {
-        self.cuts.is_empty() && self.edits.is_empty() && self.tilt.is_none() && self.open == 0.0 && self.open_to == 0.0 && !self.stuck && self.fuse_at.is_none() && self.spent == 0 && self.loaded.is_empty()
+        self.cuts.is_empty() && self.bores.is_empty() && self.edits.is_empty() && self.tilt.is_none() && self.open == 0.0 && self.open_to == 0.0 && !self.stuck && self.fuse_at.is_none() && self.spent == 0 && self.loaded.is_empty()
     }
 }
 
@@ -205,15 +209,18 @@ impl Thing {
         self.dirty = true;
     }
 
-    /// Cuts as the shader takes them (newest kept when there are too many).
+    /// The first cuts, as each instance holds them.
     pub fn gpu_cuts(&self) -> [[f32; 4]; crate::render::MAX_CUTS] {
         let mut out = [[0.0; 4]; crate::render::MAX_CUTS];
-        let n = self.shape.cuts.len();
-        let skip = n.saturating_sub(crate::render::MAX_CUTS);
-        for (i, c) in self.shape.cuts.iter().skip(skip).enumerate() {
+        for (i, c) in self.shape.cuts.iter().take(crate::render::MAX_CUTS).enumerate() {
             out[i] = *c;
         }
         out
+    }
+
+    /// The cuts past those (a wall shot full of holes).
+    pub fn more_cuts(&self) -> &[[f32; 4]] {
+        self.shape.cuts.get(crate::render::MAX_CUTS..).unwrap_or(&[])
     }
 
     /// Held or worn: not lying about.

@@ -438,13 +438,13 @@ impl WorldModel {
         for i in self.insts.iter().filter(|i| self.inst_active(i)) {
             if let Some(t) = self.types.get(&i.placed.type_id) {
                 if t.entry.solid && near(&i.placed, &t.entry) {
-                    out.push(crate::world::Solid { inst: i.placed.gpu(&t.entry, 1.0), ty: t.entry.clone() });
+                    out.push(crate::world::Solid::new(i.placed.gpu(&t.entry, 1.0), t.entry.clone()));
                 }
             }
         }
         for (pl, e) in extra {
             if e.solid && near(pl, e) {
-                out.push(crate::world::Solid { inst: pl.gpu(e, 1.0), ty: e.clone() });
+                out.push(crate::world::Solid::new(pl.gpu(e, 1.0), e.clone()));
             }
         }
         out

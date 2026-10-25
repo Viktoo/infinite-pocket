@@ -1338,7 +1338,7 @@ fn render_live_scene_png() {
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match &gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),
@@ -1405,7 +1405,7 @@ fn render_day_scene_png() {
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match &gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),
@@ -1580,7 +1580,7 @@ fn land_pictures_of(name: &str, look: crate::world::Look) {
         let light = crate::render::sky::lighting(crate::render::sky::DAY_SECONDS * 0.42, &snap.look.palette);
         let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &[], weather: Default::default() };
         let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-        let req = crate::render::FrameRequest { id: i as u64 + 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+        let req = crate::render::FrameRequest { id: i as u64 + 1, width: pw, height: ph, globals, instances: culled.insts, holes: Vec::new(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
         handle.tx.send(crate::render::RenderMsg::Frame(Box::new(req))).unwrap();
         let f = handle.rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap();
         let sc = 3u32;
@@ -1859,12 +1859,12 @@ fn a_cut_takes_a_piece_out_where_it_was_touched() {
     assert!(thing_sdf(&s, h, inside) > 0.0, "a hole after");
     assert!(thing_sdf(&s, h, elsewhere) < 0.0, "the rest of the wall stays");
     assert_eq!(s.sim.things.get(h).unwrap().shape.cuts.len(), 1);
-    // More cuts than a thing can show merge, and nothing already cut comes back.
+    // More cuts than an instance holds are all kept, and nothing already cut comes back.
     for i in 0..6 {
         let p = wall + Vec3::new(0.0, 0.0, -1.0 + i as f32 * 0.4);
         s.sim.cut(ActorId::Player, h, Some(p), 0.2, i % 2 == 0).unwrap();
     }
-    assert_eq!(s.sim.things.get(h).unwrap().shape.cuts.len(), crate::render::MAX_CUTS);
+    assert_eq!(s.sim.things.get(h).unwrap().shape.cuts.len(), 7);
     assert!(thing_sdf(&s, h, inside) > 0.0, "the first hole is still there");
     sound(&s);
 }
@@ -2004,7 +2004,7 @@ fn render_edited_hut_png() {
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match &gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),
@@ -2229,7 +2229,7 @@ fn render_png(s: &mut Session, w: &W, cam: crate::render::Camera, out: &str) {
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match &gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),
@@ -4569,7 +4569,7 @@ pub(super) fn png_of(s: &mut Session, snap: &Arc<crate::world::WorldSnapshot>, g
     let light = crate::render::sky::lighting(s.sim.t, &snap.look.palette);
     let sp = crate::render::SceneParams { terrain: &snap.terrain, palette: &snap.look.palette, camera: cam, width: pw, height: ph, pixel_aspect: 1.0, light, time: 1.0, frame: 0, shadows: true, lights: &drawn.lights, weather: Default::default() };
     let globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+    let req = crate::render::FrameRequest { id: 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
     let mut handle = match gpu {
         Some(g) => crate::render::gpu::spawn(g.clone()),
         None => crate::render::cpu::spawn(),
@@ -5120,7 +5120,7 @@ fn walking_blend_png() {
         let mut globals = crate::render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
         let j = crate::window::jitter(n);
         globals.jitter = [j[0], j[1], 1.0, 0.0];
-        let req = crate::render::FrameRequest { id: n + 1, width: pw, height: ph, globals, instances: culled.insts, grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
+        let req = crate::render::FrameRequest { id: n + 1, width: pw, height: ph, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: snap.scene.clone(), terrain: snap.terrain.clone(), look: snap.look.clone() };
         handle.tx.send(crate::render::RenderMsg::Frame(Box::new(req))).unwrap();
         let f = handle.rx.recv_timeout(std::time::Duration::from_secs(60)).unwrap();
         queue.write_texture(

@@ -192,9 +192,19 @@ fn a_musket_ball_stops_at_the_wall() {
     // Too small to see, it is cleared away; nothing got through.
     let slug = builtin_id(&w, "slug");
     assert!(!s.sim.things.live().any(|t| t.type_id == slug && t.pos.x > h.x - 2.0), "nothing passed through");
-    // The hut took the knock: a hole, and a little worn.
+    // The hut took the knock: a little worn, and a hole bored through its
+    // wooden wall, where there was wall before.
     let ht = s.sim.things.get(hut_id).unwrap();
-    assert!(!ht.shape.cuts.is_empty() && ht.props[P_HEALTH] < 1.0, "holed {} times, health {:.3}", ht.shape.cuts.len(), ht.props[P_HEALTH]);
+    assert!(ht.props[P_HEALTH] < 1.0, "worn: {:.3}", ht.props[P_HEALTH]);
+    let b = *ht.shape.bores.first().expect("a hole bored through");
+    let ty = s.sim.snap.type_of(ht.type_id).unwrap().clone();
+    let holed = crate::sim::render::thing_solid(ht, ty.clone());
+    let plain = crate::world::Solid::new(holed.inst, ty);
+    let mid = holed.inst.from_local(Vec3::new(b[0] + b[4], b[1] + b[5], b[2] + b[6]) * 0.5);
+    assert!(plain.exact_sdf(mid) < 0.0, "the bore runs through the wall");
+    // All along it, nothing is left: you can see through.
+    let (a, z) = (holed.inst.from_local(Vec3::new(b[0], b[1], b[2])), holed.inst.from_local(Vec3::new(b[4], b[5], b[6])));
+    assert!((0..=20).all(|i| holed.exact_sdf(a.lerp(z, i as f32 / 20.0)) > 0.0), "a hole right through");
     sound(&s);
 }
 

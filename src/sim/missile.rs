@@ -336,7 +336,25 @@ impl Sim {
         let name = self.thing_name(id);
         let from = self.actor(by).map(|a| a.pos).unwrap_or(at - v.normalize_or_zero());
         let deed = if shot { "shoot at".to_string() } else { format!("throw the {name} at") };
-        let notch = if speed > 60.0 { (size * 3.0).clamp(0.03, 0.6) } else { 0.14 * keen };
+        // A fast shot goes in as far as the stuff lets it (through a plank,
+        // a little way into a log, not into stone): a hole you can see
+        // through when it comes out the other side.
+        let notch = if speed > 60.0 {
+            let b = ty.ct.meta.bounds;
+            let r = ((b[0] + b[1] + b[2]) / 3.0 * 2.0 * self.things.get(id).map(|t| t.scale).unwrap_or(1.0)).clamp(0.025, 0.5);
+            let target_hard = self.things.get(on).and_then(|t| self.snap.type_of(t.type_id).map(|ty| crate::audio::call::Material::of(&t.props, &ty.ct.meta.tags, crate::audio::call::Material::from_meta(&ty.ct.meta.sound).as_ref()).hard)).unwrap_or(0.85);
+            let pen = (0.02 * mass * speed * ((0.85 - target_hard) / 0.15)).clamp(0.0, 1.5);
+            let dir = v.normalize_or_zero();
+            if pen > r && dir != Vec3::ZERO {
+                let depth = self.through(on, spot, dir, pen).map(|t| t + r).unwrap_or(pen);
+                self.bore(on, spot - dir * r, spot + dir * depth, r);
+                0.0
+            } else {
+                size
+            }
+        } else {
+            0.14 * keen
+        };
         let knock = Knock { by, on, at: spot, from, deed, with: name, bite: bite_of("flight", keen), momentum: mass * speed, hard, notch };
         self.take_knock(knock);
     }

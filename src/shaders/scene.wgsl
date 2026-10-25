@@ -52,12 +52,37 @@ fn cut_sdf(c: vec4f, p: vec3f) -> f32 {
   return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
+// A tube from a.xyz to b.xyz, radius a.w.
+fn bore_sdf(a: vec4f, b: vec4f, p: vec3f) -> f32 {
+  let pa = p - a.xyz;
+  let ba = b.xyz - a.xyz;
+  let h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+  return length(pa - ba * h) - a.w;
+}
+
+// One of the frame's holes: four words after the grid's items, from
+// G.extra.z on (see `FrameRequest::holes`).
+fn hole(k: u32) -> vec4f {
+  let b = G.extra.z + k * 4u;
+  return vec4f(bitcast<f32>(items[b]), bitcast<f32>(items[b + 1u]), bitcast<f32>(items[b + 2u]), bitcast<f32>(items[b + 3u]));
+}
+
 // A shape's local distance with the instance's cuts taken out.
 fn shape_sdf(i: Inst, lp: vec3f) -> f32 {
   var d = type_sdf(i.info.x, lp, inst_params(i));
   for (var c = 0u; c < 4u; c = c + 1u) {
     let cut = i.cuts[c];
     if (cut.w != 0.0) { d = max(d, -cut_sdf(cut, lp)); }
+  }
+  // Its many small holes only matter right at its surface: further out the
+  // distance without them is still a safe step.
+  if ((i.more.y > 0u || i.more.w > 0u) && d < 0.05) {
+    for (var c = 0u; c < i.more.y; c = c + 1u) {
+      d = max(d, -cut_sdf(hole(i.more.x + c), lp));
+    }
+    for (var c = 0u; c < i.more.w; c = c + 1u) {
+      d = max(d, -bore_sdf(hole(i.more.z + c * 2u), hole(i.more.z + c * 2u + 1u), lp));
+    }
   }
   return d;
 }

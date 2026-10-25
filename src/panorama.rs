@@ -152,7 +152,7 @@ impl Panorama {
             weather: render::WeatherView::of(&r.sim.wx, 0.0, !r.sim.open_sky(cam.pos)),
         };
         let globals = render::build_globals(&sp, culled.insts.len(), culled.grid.as_ref());
-        let req = FrameRequest { id: self.next_id, width: w, height: h, globals, instances: culled.insts, grid: culled.grid, scene: r.snap.scene.clone(), terrain: r.snap.terrain.clone(), look: r.snap.look.clone() };
+        let req = FrameRequest { id: self.next_id, width: w, height: h, globals, instances: culled.insts, holes: drawn.holes.clone(), grid: culled.grid, scene: r.snap.scene.clone(), terrain: r.snap.terrain.clone(), look: r.snap.look.clone() };
         self.next_id += 1;
         self.waiting = r.render.tx.send(RenderMsg::Frame(Box::new(req))).is_ok();
     }
