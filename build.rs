@@ -10,6 +10,24 @@ fn git(args: &[&str]) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// A hash of `src/net/wire.rs`, `src/net/rows.rs` and the world's schema
+/// (in `src/db.rs`), less comments, blank lines and tests.
+fn wire() -> u32 {
+    let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
+    let code = |s: &str| s.split("#[cfg(test)]").next().unwrap_or("").to_string();
+    let db = read("src/db.rs");
+    let schema = db.split("const SCHEMA: &str = r#\"").nth(1).and_then(|s| s.split("\"#;").next()).unwrap_or("").to_string();
+    let mut h: u32 = 0x811c_9dc5;
+    for part in [code(&read("src/net/wire.rs")), code(&read("src/net/rows.rs")), schema] {
+        for line in part.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("//")) {
+            for b in line.bytes().chain([b'\n']) {
+                h = (h ^ b as u32).wrapping_mul(0x0100_0193);
+            }
+        }
+    }
+    h
+}
+
 fn main() {
     let commit = match git(&["rev-parse", "--short=12", "HEAD"]) {
         Some(h) => {
@@ -25,6 +43,10 @@ fn main() {
     let tagged = git(&["tag", "--points-at", "HEAD"]).is_some_and(|t| t.lines().any(|l| l.trim() == format!("v{version}")));
     let release = if tagged && !commit.ends_with("-dirty") && commit != "unknown" { version.clone() } else { "dev".into() };
     println!("cargo:rustc-env=POCKET_RELEASE={release}");
+    // What two games playing together must agree on: the messages they send
+    // and the world file's tables. Any other change (a commit, a tweak not
+    // committed) still lets them play.
+    println!("cargo:rustc-env=POCKET_WIRE={}", wire());
     // Again when the commit or the code changes.
     if let (Some(dir), Some(common)) = (git(&["rev-parse", "--git-dir"]), git(&["rev-parse", "--git-common-dir"])) {
         println!("cargo:rerun-if-changed={dir}/HEAD");

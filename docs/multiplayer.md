@@ -2,12 +2,13 @@
 
 **One person hosts a world and friends join it.** Everyone walks the same world,
 talks to the same people, and sees what the others make as it appears. Friends don't
-need an AI key: the host's is used, up to a limit the host sets. Everyone needs the
-same version of the game.
+need an AI key: the host's is used, up to a limit the host sets. Everyone needs a version of the game
+that sends the same messages: any two builds whose messages and world tables match can
+play, so a host on a tweaked dev build can have guests on the latest release.
 
 | | Host | Friend |
 |---|---|---|
-| Needs | a world, and an AI key to make things and talk | the same version of the game |
+| Needs | a world, and an AI key to make things and talk | a matching version of the game |
 | Starts with | **Esc → Open to friends** | **Play together** on the title screen |
 | Over the internet | ngrok, installed once | nothing extra |
 
@@ -31,6 +32,15 @@ same version of the game.
 
 1. On the title screen, click **Play together**.
 2. Pick the host's game, click **Join**, and type the code.
+
+If it doesn't work:
+
+- **The game isn't listed**: some networks keep games from seeing each other. Click
+  **Join with an invite…** and type the address the host was shown, and the code.
+- **"macOS may be keeping this game off the local network"**: allow it in System
+  Settings → Privacy & Security → Local Network (it may be listed as your terminal).
+- **"didn't answer"**: if the host's Mac has its firewall on, the host allows Infinite
+  Pocket in System Settings → Network → Firewall.
 
 ## Over the internet (ngrok)
 
@@ -110,8 +120,12 @@ flowchart LR
   rows, and kept live by changes 20 times a second (things, beings, fire, weather,
   their own wounds).
 - A guest moves themselves and the host keeps it (a jump over 25 m is put back).
-- When a guest joins, both sides compare release, commit and network protocol; the
-  one who is behind is told to update.
+- When a guest joins, both sides compare what they send and keep: a hash of
+  `src/net/wire.rs`, `src/net/rows.rs` and the world's schema, with `PROTOCOL` (bump it
+  when a message's meaning changes but not its shape). If they match, release and commit
+  may differ and both are told so; if not, the one who is behind is told to update.
+- A guest whose connection is slower than what is sent skips the steady updates
+  (bodies, the world near them, sounds) until it catches up.
 - Code: `src/net` (wire, host, guest, discovery, ngrok), `src/app/together.rs`,
   `src/sim/travelers.rs` (other players as bodies), `src/sim/mirror.rs` (the world as
   a guest sees it). The design is in [multiplayer-plan.md](multiplayer-plan.md).

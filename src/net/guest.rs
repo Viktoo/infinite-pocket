@@ -34,12 +34,15 @@ pub fn connect(addr: &str) -> Result<Link<Down, Up>> {
                 sock = Some(s);
                 break;
             }
-            Err(e) => last = Some(e),
+            Err(e) => last = Some((e, a)),
         }
     }
     let sock = match sock {
         Some(s) => s,
-        None => bail!("can't reach {host}:{port}{}", last.map(|e| format!(" ({e})")).unwrap_or_default()),
+        None => match last {
+            Some((e, a)) => bail!("{}", unreached(&host, port, &e, a.ip())),
+            None => bail!("can't reach {host}:{port}"),
+        },
     };
     sock.set_read_timeout(Some(Duration::from_secs(10)))?;
     let (ws, _) = tungstenite::client_tls_with_config(req, sock, Some(super::ws_config()), None).map_err(|e| anyhow::anyhow!("{host} didn't answer as a game: {e}"))?;
@@ -49,6 +52,21 @@ pub fn connect(addr: &str) -> Result<Link<Down, Up>> {
         _ => {}
     }
     Ok(spawn_link(ws, "guest-link".into()))
+}
+
+/// Why `host:port` couldn't be reached, as the one joining can act on it.
+fn unreached(host: &str, port: u16, e: &std::io::Error, ip: std::net::IpAddr) -> String {
+    use std::io::ErrorKind as K;
+    let near = match ip {
+        std::net::IpAddr::V4(v) => v.is_private() || v.is_link_local(),
+        std::net::IpAddr::V6(_) => false,
+    };
+    match e.kind() {
+        K::HostUnreachable | K::NetworkUnreachable if near && cfg!(target_os = "macos") => format!("Can't reach {host}:{port}: macOS may be keeping this game off the local network. Allow it in System Settings → Privacy & Security → Local Network (it may be listed as your terminal), then try again."),
+        K::ConnectionRefused => format!("Nothing is hosting at {host}:{port}. Check the address, and that the host's world is open to friends."),
+        K::TimedOut if near => format!("{host}:{port} didn't answer. Check you're both on the same Wi-Fi, and if the host's Mac has its firewall on, that it lets Infinite Pocket in (System Settings → Network → Firewall)."),
+        _ => format!("Can't reach {host}:{port} ({e})."),
+    }
 }
 
 /// Join: hello, then the welcome and the world. `progress` hears how far

@@ -548,7 +548,10 @@ impl Menus {
         s.labels.push(left(x + 0.5, y, "Games on your network", 1.0, [150, 170, 220], Face::Title));
         y += 1.6;
         if self.found.is_empty() {
-            y = para(s, x + 0.5, y, cw - 1.0, "None yet. When someone on this Wi-Fi hosts a world, it shows here by itself.", DIM) + 0.6;
+            // Some networks keep the host's call from reaching anyone.
+            let long = self.listen.as_ref().is_none_or(|l| l.listening_for() > std::time::Duration::from_secs(6));
+            let say = if long { "None found. Some networks keep games from seeing each other: choose Join with an invite and type the address the host was shown, and the code." } else { "None yet. When someone on this Wi-Fi hosts a world, it shows here by itself." };
+            y = para(s, x + 0.5, y, cw - 1.0, say, DIM) + 0.6;
         }
         if self.game.is_some_and(|g| g >= self.found.len()) {
             self.game = None;

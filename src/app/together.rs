@@ -20,6 +20,10 @@ use std::time::{Duration, Instant};
 
 /// How often bodies are sent.
 const BODY_EVERY: Duration = Duration::from_millis(50);
+/// Messages waiting for a guest past which the steady ones (bodies, the
+/// world near them, sounds) skip a turn: a connection slower than what is
+/// sent catches up rather than falling ever further behind.
+const BACKLOG: usize = 20;
 /// How far behind what was heard the others are drawn (so there are two
 /// to draw between).
 const BEHIND: Duration = Duration::from_millis(110);
@@ -285,7 +289,7 @@ impl App {
             let mut all: Vec<(TravelerNo, Body)> = vec![(0, Body::of(&self.sim.player, self.pitch))];
             all.extend(self.sim.travelers.values().map(|t| (t.no, Body::of(&t.a, t.pitch))));
             for (&no, g) in h.guests.iter_mut() {
-                if !g.told_ready {
+                if !g.told_ready || g.link.backlog() > BACKLOG {
                     continue;
                 }
                 let others = all.iter().filter(|(n, _)| *n != no).copied().collect();
@@ -344,7 +348,7 @@ impl App {
         if h.guests.is_empty() || self.sim.sounds.is_empty() {
             return;
         }
-        for (no, g) in h.guests.iter().filter(|(_, g)| g.told_ready) {
+        for (no, g) in h.guests.iter().filter(|(_, g)| g.told_ready && g.link.backlog() <= BACKLOG) {
             let Some(at) = self.sim.travelers.get(no).map(|t| t.a.pos) else { continue };
             let near: Vec<wire::Sound> = self.sim.sounds.iter().filter(|c| (c.at - at).length() < 80.0).map(wire_sound).collect();
             if !near.is_empty() {
@@ -389,6 +393,10 @@ impl App {
         }
         crate::log::info(format!("{} joins from {from} as traveler {no}", hello.name));
         self.say(None, &format!("{} is joining…", hello.name), DIM);
+        let (r, c, w) = crate::net::this_build();
+        if let Some(n) = crate::net::build_note(&format!("{} is", hello.name), (r, c, w), (&hello.release, &hello.commit, w)) {
+            self.say(None, &n, DIM);
+        }
         // Back: where they left, as they were. New: before the host.
         let (at, yaw) = match &row {
             Some(r) => (Vec3::from_array(r.pos), r.yaw),
@@ -406,7 +414,7 @@ impl App {
         self.save_player();
         self.save_characters();
         let body = self.sim.travelers.get(&no).map(|t| Body::of(&t.a, 0.0)).unwrap_or_default();
-        let welcome = Welcome { you: no, world: h.world.clone(), name: hello.name.clone(), host: h.name.clone(), bytes: 0, packed: 0, body, look, wounds, t: self.sim.t, seed: self.sim.seed };
+        let welcome = Welcome { you: no, world: h.world.clone(), name: hello.name.clone(), host: h.name.clone(), bytes: 0, packed: 0, body, look, wounds, t: self.sim.t, seed: self.sim.seed, build: (crate::db::RELEASE.into(), crate::db::COMMIT.into()) };
         let (tx, path, r, watch) = (g.link.sender(), h.path.clone(), g.ready.clone(), h.watch.clone());
         let name = hello.name.clone();
         let _ = std::thread::Builder::new().name("host-send-world".into()).spawn(move || match crate::net::host::guest_copy(&path) {
@@ -790,6 +798,10 @@ impl App {
             let host = g.host_name();
             self.together = Some(Together::Guest(g));
             self.say(None, &format!("You're in {host}'s world. They keep it, and its words come from them."), ACCENT);
+            let (r, c, n) = crate::net::this_build();
+            if let Some(note) = crate::net::build_note(&format!("{host} is"), (r, c, n), (&w.build.0, &w.build.1, n)) {
+                self.say(None, &note, DIM);
+            }
         }
     }
 

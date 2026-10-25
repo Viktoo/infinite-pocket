@@ -26,9 +26,10 @@ on the worlds list and in settings; `pocket version` prints it.
 A world keeps the release and commit that made it (`made_with_release`, `made_with`)
 and that last opened it (`last_opened_with_release`, `last_opened_with`).
 
-Playing together needs the same release on both sides: host and guest compare
-`db::RELEASE`, `db::COMMIT` and the network protocol when a guest joins, and the one
-who is behind is told to update.
+Playing together needs builds that send and keep the same: host and guest compare
+`net::wire()` (a hash of the messages and the world's tables, with `PROTOCOL`) when a
+guest joins. Release and commit may differ, so a dev host can have release guests;
+when the hashes differ, the one who is behind is told to update.
 
 ---
 

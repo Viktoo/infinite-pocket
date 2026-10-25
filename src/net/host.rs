@@ -179,7 +179,7 @@ mod tests {
     /// What a game would do with an arrival: the world, in pieces.
     fn welcome(a: &Arrival, path: &Path) {
         let (packed, bytes, _) = guest_copy(path).unwrap();
-        a.link.send(Down::Welcome(Welcome { you: 2, world: "a quiet bay".into(), name: "Ana".into(), host: "Hal".into(), bytes, packed: packed.len() as u64, body: Body { pos: [5.0, 0.0, 6.0], ..Default::default() }, look: Default::default(), wounds: 0.2, t: 300.0, seed: 1 }));
+        a.link.send(Down::Welcome(Welcome { you: 2, world: "a quiet bay".into(), name: "Ana".into(), host: "Hal".into(), bytes, packed: packed.len() as u64, body: Body { pos: [5.0, 0.0, 6.0], ..Default::default() }, look: Default::default(), wounds: 0.2, t: 300.0, seed: 1, build: Default::default() }));
         for c in packed.chunks(1000) {
             a.link.send(Down::WorldChunk(c.to_vec()));
         }

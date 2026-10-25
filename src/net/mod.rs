@@ -25,9 +25,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tungstenite::{Message, WebSocket};
 
-/// The messages' own version: host and guest must agree on it (as on the
-/// release and the commit; see `check_build`).
+/// The messages' own version, bumped by hand when what a message means
+/// changes but not its shape. With a hash of the messages and the world's
+/// tables (`POCKET_WIRE`, from build.rs) it makes `wire()`, which host and
+/// guest must agree on; their release and commit may differ.
 pub const PROTOCOL: u32 = 1;
+
+/// What this build sends and keeps, as one number (see `PROTOCOL`).
+pub fn wire() -> u32 {
+    let w: u32 = env!("POCKET_WIRE").parse().unwrap_or(0);
+    w ^ PROTOCOL.wrapping_mul(0x9e37_79b9)
+}
 
 /// The port a host listens on unless told otherwise.
 pub const PORT: u16 = 7777;
@@ -53,6 +61,12 @@ impl<In, Out> Link<In, Out> {
     /// A way to send from another thread.
     pub fn sender(&self) -> Sender<Out> {
         self.tx.clone()
+    }
+
+    /// How many messages wait to go out: many means the other side's
+    /// connection is slower than what is sent to it.
+    pub fn backlog(&self) -> usize {
+        self.tx.len()
     }
 
     /// Everything that has come in since last asked.
@@ -112,9 +126,14 @@ where
             // Out first: everything waiting, then one flush.
             let mut wrote = false;
             for m in out_rx.try_iter() {
-                if let Err(e) = ws.write(Message::Binary(encode(&m).into())) {
-                    end(format!("sending: {e}"));
-                    return;
+                match ws.write(Message::Binary(encode(&m).into())) {
+                    Ok(()) => {}
+                    // A slow socket: the message is kept and goes with the flush.
+                    Err(tungstenite::Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {}
+                    Err(e) => {
+                        end(format!("sending: {e}"));
+                        return;
+                    }
                 }
                 wrote = true;
             }
@@ -196,14 +215,19 @@ fn ws_config() -> tungstenite::protocol::WebSocketConfig {
     tungstenite::protocol::WebSocketConfig::default().max_message_size(Some(MAX_MESSAGE)).max_frame_size(Some(MAX_MESSAGE))
 }
 
+/// A build in words: its release, or `dev` and its commit.
+fn build_name((r, c, _): (&str, &str, u32)) -> String {
+    if r == "dev" { format!("dev {c}") } else { r.to_string() }
+}
+
 /// Why two builds can't play together, in words for the one who joins, or
-/// None when they can. `mine` and `theirs` are (release, commit, protocol).
+/// None when they can: when they send and keep the same (`wire()`), whatever
+/// their release and commit. Each is (release, commit, wire).
 pub fn check_build(host: (&str, &str, u32), guest: (&str, &str, u32)) -> Option<String> {
-    let name = |(r, c, _): (&str, &str, u32)| if r == "dev" { format!("dev {c}") } else { r.to_string() };
-    if host.0 == guest.0 && host.1 == guest.1 && host.2 == guest.2 {
+    if host.2 == guest.2 {
         return None;
     }
-    let (h, g) = (name(host), name(guest));
+    let (h, g) = (build_name(host), build_name(guest));
     if h == g {
         // Same name, different insides (two dev builds of one commit can't
         // differ; a protocol can, in a build with changes not committed).
@@ -221,6 +245,13 @@ pub fn check_build(host: (&str, &str, u32), guest: (&str, &str, u32)) -> Option<
     })
 }
 
+/// Two builds let to play together that aren't the same one, said to `mine`
+/// about `who` on `theirs`; None when they are the same.
+pub fn build_note(who: &str, mine: (&str, &str, u32), theirs: (&str, &str, u32)) -> Option<String> {
+    let (m, t) = (build_name(mine), build_name(theirs));
+    (m != t).then(|| format!("{who} on {t} and you on {m}: you can play together, though small things may differ."))
+}
+
 /// "0.4.2" as numbers, for which is newer.
 pub fn semver(v: &str) -> Option<(u32, u32, u32)> {
     let mut p = v.trim_start_matches('v').split('.').map(|x| x.parse::<u32>().ok());
@@ -229,7 +260,7 @@ pub fn semver(v: &str) -> Option<(u32, u32, u32)> {
 
 /// This build, as `check_build` compares it.
 pub fn this_build() -> (&'static str, &'static str, u32) {
-    (crate::db::RELEASE, crate::db::COMMIT, PROTOCOL)
+    (crate::db::RELEASE, crate::db::COMMIT, wire())
 }
 
 /// A short secret a guest must give to join: two words and a number, easy
@@ -290,11 +321,16 @@ mod tests {
     #[test]
     fn builds_that_differ_say_who_should_update() {
         assert_eq!(check_build(("0.5.0", "abc", 1), ("0.5.0", "abc", 1)), None);
-        let m = check_build(("0.5.0", "abc", 1), ("0.4.2", "def", 1)).unwrap();
+        // Sending and keeping the same, any two builds play.
+        assert_eq!(check_build(("dev", "abc-dirty", 1), ("0.5.0", "def", 1)), None);
+        let m = build_note("The host is", ("0.5.0", "def", 1), ("dev", "abc-dirty", 1)).unwrap();
+        assert!(m.contains("dev abc-dirty") && m.contains("0.5.0"), "{m}");
+        assert_eq!(build_note("The host is", ("0.5.0", "def", 1), ("0.5.0", "def", 1)), None);
+        let m = check_build(("0.5.0", "abc", 1), ("0.4.2", "def", 2)).unwrap();
         assert!(m.contains("Update to 0.5.0"), "{m}");
-        let m = check_build(("0.4.2", "abc", 1), ("0.5.0", "def", 1)).unwrap();
+        let m = check_build(("0.4.2", "abc", 1), ("0.5.0", "def", 2)).unwrap();
         assert!(m.contains("host needs to update to 0.5.0"), "{m}");
-        let m = check_build(("dev", "abc", 1), ("dev", "def", 1)).unwrap();
+        let m = check_build(("dev", "abc", 1), ("dev", "def", 2)).unwrap();
         assert!(m.contains("dev abc") && m.contains("dev def") && m.contains("same build"), "{m}");
         assert!(check_build(("dev", "abc", 1), ("dev", "abc", 2)).unwrap().contains("differ inside"));
     }

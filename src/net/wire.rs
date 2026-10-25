@@ -115,6 +115,8 @@ pub struct Welcome {
     pub t: f64,
     /// The host's world's seed for this session (people look the same by it).
     pub seed: u64,
+    /// The host's build (release, commit): it may differ from the guest's.
+    pub build: (String, String),
 }
 
 /// Someone in the world.
@@ -351,7 +353,7 @@ mod tests {
     fn messages_go_through_whole() {
         let mut look = BTreeMap::new();
         look.insert("skin".to_string(), 0.4);
-        let m = Down::Welcome(Welcome { you: 2, world: "a bay".into(), name: "Ana".into(), host: "Hal".into(), bytes: 10, packed: 5, body: Body { pos: [1.0, 2.0, 3.0], flags: RUNNING | GROUNDED, ..Default::default() }, look, wounds: 0.0, t: 12.5, seed: 1 });
+        let m = Down::Welcome(Welcome { you: 2, world: "a bay".into(), name: "Ana".into(), host: "Hal".into(), bytes: 10, packed: 5, body: Body { pos: [1.0, 2.0, 3.0], flags: RUNNING | GROUNDED, ..Default::default() }, look, wounds: 0.0, t: 12.5, seed: 1, build: ("dev".into(), "abc".into()) });
         let back: Down = crate::net::decode(&crate::net::encode(&m)).unwrap();
         assert_eq!(back, m);
     }
