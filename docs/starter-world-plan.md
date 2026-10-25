@@ -22,7 +22,7 @@ gzip -9 -kf worlds/starter/starter.pocket
 (`src/starter.rs`). The file keeps a fingerprint of the folder it was made
 from (kv `authored.source`); a test fails when the folder changed and the
 file wasn't made again. `world.json` may set `start_hour` and `facing`
-(degrees): the time and way a traveler first arrives (Maple Cove: 5 pm,
+(degrees): the time and way a traveler first arrives (Maple Cove: 5:30 am, dawn,
 facing the gazebo).
 
 ## Its lifecycle
