@@ -30,11 +30,15 @@ Then add an Anthropic API key in **Settings → AI**. Get one at [platform.claud
 
 Characters' voices (354 MB) and speak to talk (148 MB) are optional downloads in **Settings → Sound**.
 
-## Windows (beta)
+New versions come out often. To update:
 
-Untested: we haven't played it on Windows yet. Download `pocket-<version>-windows-x64.zip` from the [latest release](https://github.com/Viktoo/infinite-pocket/releases/latest), unzip it and run `pocket.exe`. If Windows says it protected your PC, click **More info → Run anyway**. Then add an API key as above.
+```bash
+brew upgrade pocket
+```
 
-If something breaks, please [open an issue](https://github.com/Viktoo/infinite-pocket/issues).
+To play together, everyone needs the same version.
+
+Windows is coming.
 
 ## Play
 
