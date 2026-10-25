@@ -1004,7 +1004,8 @@ impl App {
         if text.is_empty() {
             return;
         }
-        if !self.brain.has_llm {
+        // A guest's deeds in words are the host's LLM's work.
+        if !self.brain.has_llm && !self.is_guest() {
             self.say(None, "Doing things in words needs an AI key (Esc → Settings → AI).", DIM);
             return;
         }

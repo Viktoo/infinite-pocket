@@ -41,6 +41,8 @@ pub struct Menu {
     fresh: bool,
     /// Why hosting couldn't start.
     open_err: Option<String>,
+    /// The invite's address shown, not dots (it can be read off a recording).
+    show_addr: bool,
 }
 
 /// A medal: more ornate as the challenge grows.
@@ -150,7 +152,7 @@ impl App {
     pub(super) fn open_menu(&mut self, achievements: bool) {
         self.menu = match self.menu {
             Some(_) => None,
-            None => Some(Menu { page: if achievements { Page::Achievements } else { Page::Pause }, details: None, ach_sel: 0, ach_scroll: 0.0, creations: None, settings: Default::default(), fresh: false, open_err: None }),
+            None => Some(Menu { page: if achievements { Page::Achievements } else { Page::Pause }, details: None, ach_sel: 0, ach_scroll: 0.0, creations: None, settings: Default::default(), fresh: false, open_err: None, show_addr: false }),
         };
         if self.log_view == 2 {
             self.set_log_view(0);
@@ -500,14 +502,22 @@ impl App {
 
     fn invite_page(&mut self, ui: &mut crate::ui::Ui, s: &mut crate::term::Screen, w: u16, vh: u16) {
         let Some(super::together::Together::Host(h)) = &self.together else { return self.menu_page(Page::Pause) };
+        let shown = self.menu.as_ref().is_some_and(|m| m.show_addr);
         let (addr, code, names) = (h.address(), h.host.code.clone(), h.names());
+        let addr = if shown { addr } else { crate::ui::secret_view(&addr) };
         let area = Self::page_panel(s, w, vh, 70.0, 22.0, "Invite friends");
         let mut y = area.y + 3.8;
-        y = Self::page_para(s, area, y, "Send them this invite. In Infinite Pocket they choose Play together → Join with an invite, and paste it. On this network your game also shows there by itself.", DIM) + 0.8;
+        y = Self::page_para(s, area, y, "Send them this invite (the address stays hidden on screen; Copy invite still copies it). In Infinite Pocket they choose Play together → Join with an invite, and paste it. On this network your game also shows there by itself.", DIM) + 0.8;
         let card = R::new(area.x + 2.0, y, area.w - 4.0, 4.4);
         s.deco(crate::term::Deco::panel(card.x, card.y, card.w, card.h, [18, 20, 28]).border(crate::ui::PANEL_EDGE));
         s.labels.push(crate::ui::left(card.x + 1.5, card.y + 1.2, "Address", 0.85, DIM, crate::term::Face::Body));
         s.labels.push(crate::ui::left(card.x + 12.0, card.y + 1.2, &addr, 1.0, TEXT, crate::term::Face::Bold));
+        let eye = R::new(card.x + card.w - 9.5, card.y + 0.25, 8.0, 1.8);
+        if ui.button(s, eye, if shown { "Hide" } else { "Show" }, Kind::Quiet) {
+            if let Some(m) = self.menu.as_mut() {
+                m.show_addr = !shown;
+            }
+        }
         s.labels.push(crate::ui::left(card.x + 1.5, card.y + 3.0, "Code", 0.85, DIM, crate::term::Face::Body));
         s.labels.push(crate::ui::left(card.x + 12.0, card.y + 3.0, &code, 1.3, ACCENT, crate::term::Face::Bold));
         y += 5.4;

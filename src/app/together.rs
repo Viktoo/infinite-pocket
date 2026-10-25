@@ -192,7 +192,7 @@ impl App {
         let ts = h.tunnel.as_ref().map(|t| t.state());
         if ts != h.told_tunnel && ts != Some(crate::net::ngrok::State::Starting) {
             match &ts {
-                Some(crate::net::ngrok::State::Up(url)) => self.say(None, &format!("Open over the internet at {url} (F5 copies the invite)."), ACCENT),
+                Some(crate::net::ngrok::State::Up(_)) => self.say(None, "Open over the internet (F5 copies the invite).", ACCENT),
                 Some(crate::net::ngrok::State::Failed(why)) => self.say(None, &format!("Only on this network: {why}."), DIM),
                 _ => {}
             }
@@ -812,8 +812,10 @@ impl App {
             Some(Together::Guest(g)) => format!("in {}'s world: ask them for the invite", g.host_name()),
             None => return,
         };
-        let copied = matches!(self.together, Some(Together::Host(_))) && arboard::Clipboard::new().and_then(|mut c| c.set_text(line.clone())).is_ok();
-        self.say(None, &if copied { format!("Copied: {line}. Whoever joins chooses Play together → Join with an invite, and pastes it.") } else { line }, ACCENT);
+        let guest = self.is_guest();
+        let copied = !guest && arboard::Clipboard::new().and_then(|mut c| c.set_text(line.clone())).is_ok();
+        // The address is never written on screen: it can be read off a recording.
+        self.say(None, &if copied { "Copied the invite. Whoever joins chooses Play together → Join with an invite, and pastes it.".to_string() } else if guest { line } else { "Couldn't copy the invite: Esc → Invite friends shows it.".to_string() }, ACCENT);
     }
 
     /// The host sends a guest away ("/kick NAME"): they leave the world at
@@ -885,7 +887,7 @@ impl App {
                     0 => "nobody has joined yet".to_string(),
                     _ => format!("with {}", h.names().join(", ")),
                 };
-                Some(format!("hosting at {} · code {} · {who} · F5 copy", h.address(), h.host.code))
+                Some(format!("hosting · code {} · {who} · F5 copies the invite", h.host.code))
             }
             Some(Together::Guest(g)) => Some(format!("in {}'s world", g.host_name())),
             None => None,
