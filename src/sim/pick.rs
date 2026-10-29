@@ -137,6 +137,11 @@ impl Sim {
         for _ in 0..220 {
             let p = ro + rd * t;
             let mut d = (p.y - terrain.height(p.x, p.z)) * 0.6;
+            // Under the surface in a hollow (a cave, a home set into a hill,
+            // the way dug down to it) the air goes on to its walls.
+            if d < 0.5 && terrain.caves_near(p.x, p.z) {
+                d = d.max(-terrain.void(p) * 0.9);
+            }
             let mut hit: Option<usize> = None;
             for (i, c) in cands.iter().enumerate() {
                 let mut dc = sdf(c, p);

@@ -35,6 +35,11 @@ fn an_earth_house_under_flat_ground() {
     let ola = add_char(&w, "Ola", "kind", &[], Vec3::new(h.x + 6.0, 0.0, h.z + 14.0));
     let mut s = session(&w, 72, None);
     calm(&mut s);
+    // From the ramp the traveler points at the door (the hill over the ramp is no wall).
+    let eye = Vec3::new(h.x, t.floor(h.x, t.height(h.x, h.z + 5.5) + 0.5, h.z + 5.5) + 1.6, h.z + 5.5);
+    let door = Vec3::new(h.x, p.pos.y + 1.0, h.z + 3.0);
+    let seen = s.sim.pick(eye, door - eye, 8.0, 0.02, Some(ActorId::Player)).map(|q| q.name);
+    assert_eq!(seen.as_deref(), Some("door"), "the door is pointed at from the ramp");
     let o = ActorId::Npc(ola);
     let goal = Vec3::new(h.x - 1.0, p.pos.y, h.z - 1.0);
     s.sim.cast.get_mut(ola).unwrap().plan.push_back(Action::Goto { target: Target::Point(goal.to_array()), run: false });
