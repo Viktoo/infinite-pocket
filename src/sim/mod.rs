@@ -39,6 +39,7 @@ pub mod motion;
 pub mod needs;
 pub mod night;
 pub mod npc;
+pub mod paths;
 pub mod persist;
 pub mod phantom;
 pub mod physics;
@@ -442,6 +443,8 @@ pub struct Sim {
     /// on its way there, remembered for a moment: (where to, when, next).
     pub levels: levels::Levels,
     level_ways: parking_lot::Mutex<HashMap<ActorId, (Vec3, f64, Vec3)>>,
+    /// The ground as walkers meet it, and each one's way round (see `paths`).
+    pub paths: paths::Paths,
     /// How fast each vehicle in use is going (m/s, forward; see `vehicle`).
     pub drives: std::collections::BTreeMap<things::ThingId, f32>,
     /// Beasts harnessed to what they pull (a cart's horse, a sledge's dogs).
@@ -527,6 +530,7 @@ impl Sim {
             climbs: climb::climbs_of(&snap),
             levels: Default::default(),
             level_ways: Default::default(),
+            paths: Default::default(),
             weather: crate::world::weather::Weather::new(&snap.look.climate, snap.terrain.seed),
             wx: Default::default(),
             weather_st: Default::default(),
@@ -905,6 +909,7 @@ impl Sim {
         self.climbs = climb::climbs_of(&snap);
         self.levels = levels::levels_of(&snap, &self.climbs, &self.rooms);
         self.level_ways.lock().clear();
+        self.paths.forget();
         for id in self.actor_ids() {
             self.off_ladder(id);
         }

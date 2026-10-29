@@ -19,6 +19,7 @@ mod hands;
 mod heights;
 mod missiles;
 mod night;
+mod paths;
 mod together;
 mod underground;
 mod remains;

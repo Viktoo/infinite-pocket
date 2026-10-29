@@ -184,7 +184,7 @@ fn wadeable(terrain: &Terrain, x: f32, z: f32) -> bool {
 
 /// Whether a body at `q` with its feet at `feet` would be in a cave's rock:
 /// above its step (a wall) or at its head (a low roof). Only near caves.
-fn cave_wall(terrain: &Terrain, q: Vec2, feet: f32, b: Capsule) -> bool {
+pub fn cave_wall(terrain: &Terrain, q: Vec2, feet: f32, b: Capsule) -> bool {
     if !terrain.caves_near(q.x, q.y) {
         return false;
     }
@@ -194,6 +194,16 @@ fn cave_wall(terrain: &Terrain, q: Vec2, feet: f32, b: Capsule) -> bool {
         return false;
     }
     [feet + b.step + 0.05, feet + b.height * 0.85].iter().any(|y| terrain.solid(glam::Vec3::new(q.x, *y, q.y)))
+}
+
+/// A body afloat at the top, or bobbing just under it, meets what reaches
+/// down into the water as a wall (a wall standing in a pond): it doesn't
+/// slip under and come up inside. A diver deep under is left as it is.
+pub fn at_the_top(b: Capsule, feet: f32, wl: f32) -> Capsule {
+    if feet + b.height < wl - 0.6 {
+        return b;
+    }
+    Capsule { height: b.height.max(wl + 0.05 + b.radius - feet), ..b }
 }
 
 /// Whether going from `from` towards `to` climbs a rock face: the natural
@@ -242,6 +252,7 @@ pub fn move_body(terrain: &Terrain, obs: &Obstacles, from: Vec3, delta: Vec3, b:
     } else {
         from.y
     };
+    let b = if afloat { at_the_top(b, feet, wl) } else { b };
     let dist = |x: f32, z: f32| obs.dist_body(x, z, feet, b);
     // Clear by the fast distance, or (near a carved opening) by the rim.
     let ok = |x: f32, z: f32, d: f32| d >= radius || obs.clear(x, z, feet, b);
@@ -527,6 +538,31 @@ mod tests {
         }
         assert!(held as f32 >= faces.len() as f32 * 0.9, "faces hold climbers back: {held} of {}", faces.len());
         assert_eq!(went_down, faces.len(), "and anyone goes down them");
+    }
+
+    #[test]
+    fn a_swimmer_does_not_slip_under_a_wall_standing_in_the_water() {
+        let ct = compile(
+            "export const meta = { name: \"wall\", bounds: [3, 1.2, 0.3], tags: [] };\n\
+             export function sdf(x, y, z, k) { return box(x, y, z, 3, 1.2, 0.3); }\n\
+             export function color(x, y, z, k) { return rgb(200, 200, 200); }",
+        )
+        .unwrap();
+        let ty = Arc::new(TypeEntry { id: 1, ct: Arc::new(ct), builtin: false, solid: true, bottom: -1.2, top: 1.2, sphere_cy: 0.0, sphere_r: 3.3 });
+        let terrain = Terrain::new(1, crate::terrain::default_biomes());
+        let sea = (0..400).map(|i| Vec2::new(i as f32 * 5.0 - 1000.0, -600.0)).find(|q| terrain.height(q.x, q.y) < terrain.water(q.x, q.y) - 4.0).expect("deep sea");
+        let wl = terrain.water(sea.x, sea.y);
+        // Its foot 15 cm under the water: under the reach of a swimmer's body, not its head.
+        let inst = GpuInst { pos_scale: [sea.x, wl + 1.05, sea.y + 2.0, 1.0], rot: [1.0, 0.0, ty.radius(), 1.0], ..Default::default() };
+        let solids = vec![Solid::new(inst, ty)];
+        let obs = Obstacles { solids: &solids, bodies: &[] };
+        let swan = Capsule { radius: 0.4, height: 1.1, step: 0.275, swims: true, needs_water: 0.0 };
+        // Bobbing a little under: its head 20 cm down.
+        let mut p = Vec3::new(sea.x, wl - 0.2 - swan.height, sea.y);
+        for _ in 0..80 {
+            p = move_body(&terrain, &obs, p, Vec3::new(0.0, 0.0, 0.05), swan);
+        }
+        assert!(p.z < sea.y + 2.0 - 0.3, "stopped at the wall: {:.2} m past where it stands", p.z - sea.y - 2.0);
     }
 
     #[test]

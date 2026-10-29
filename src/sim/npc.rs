@@ -906,7 +906,9 @@ impl Sim {
                     None => failed = true,
                     Some(p) => {
                         let flat = Vec3::new(p.x - me.x, 0.0, p.z - me.z);
-                        if flat.length() <= *stop {
+                        // Someone already stands on the spot: beside them will do.
+                        let taken = matches!(target, Target::Point(_)) && flat.length() <= *stop + 1.5 && self.spot_taken(who, p);
+                        if flat.length() <= *stop || taken {
                             if airborne {
                                 // Come down first.
                                 self.fly_toward(mover, p, fly, dt, true);
@@ -995,7 +997,7 @@ impl Sim {
                             let side = Vec3::new(-d.z, 0.0, d.x) * if tries == 0 { 3.0 } else { -6.0 } - d * 1.0;
                             let p = me + side;
                             // Close by, whatever blocks them is what they came to.
-                            (away.length() > 4.0 && self.can_be_at(who, p, 0.2)).then(|| (Action::Goto { target: Target::Point(p.to_array()), run: false }, Action::Goto { target: target.clone(), run: *run }))
+                            (away.length() > 4.0 && self.can_be_at(who, p, 0.2) && self.open_at(who, p)).then(|| (Action::Goto { target: Target::Point(p.to_array()), run: false }, Action::Goto { target: target.clone(), run: *run }))
                         }
                         _ => None,
                     };
@@ -1050,9 +1052,10 @@ impl Sim {
     /// Walk towards a point. False when stuck.
     fn step_toward(&mut self, who: ActorId, p: Vec3, speed: f32, dt: f32) -> bool {
         let Some(me) = self.actor(who).map(|a| a.pos) else { return false };
-        // Through doorways and up stairs: the next step on the way.
+        // Through doorways, up stairs and round what is in the way: the
+        // next step on the way.
         let dest = p;
-        let p = self.route(who, p);
+        let p = self.way_to(who, p);
         let speed = speed * self.gait_factor(who);
         // Up or down a ladder on the way.
         if let Some(r) = self.ladder_step(who, p, speed * dt) {
@@ -1078,6 +1081,20 @@ impl Sim {
             return true;
         }
         let dir = d / len;
+        // Keeping room from others on the way: leaning off anyone too near,
+        // round one straight ahead.
+        let dir = match who {
+            ActorId::Npc(_) => {
+                let push = self.crowd(who, me);
+                let back = push.dot(dir);
+                let mut side = push - dir * back;
+                if back < 0.0 && side.length() < back.abs() * 0.3 {
+                    side = Vec3::new(-dir.z, 0.0, dir.x) * -back;
+                }
+                (dir + side * 1.5 + dir * back.max(-0.5) * 0.5).normalize_or(dir)
+            }
+            _ => dir,
+        };
         if let Some(a) = self.actor_mut(who) {
             a.face(dir, dt * 6.0);
             a.asleep = false;
@@ -1097,6 +1114,10 @@ impl Sim {
                     }
                 } else if self.actor(who).is_some_and(|a| !a.crouching) && self.crouch_fits(who, ahead) {
                     self.crouch(who, Some(true));
+                } else if self.actor(who).is_some_and(|a| a.stuck > 0.8) && self.crowd(who, ahead) == Vec3::ZERO {
+                    // Nobody in the way, and still no further: what the way
+                    // went through is shut.
+                    self.way_blocked(who, ahead);
                 }
             } else if self.actor(who).is_some_and(|a| a.crouching) && self.room_to_stand(who, me) && self.room_to_stand(who, ahead) {
                 self.crouch(who, Some(false));
@@ -1256,6 +1277,9 @@ impl Sim {
             let idle = self.cast.get(cid).is_some_and(|n| n.a.task.is_none() && n.plan.is_empty());
             if idle && !self.social.busy(me) && t >= self.cast.get(cid).map(|n| n.think_at).unwrap_or(0.0) {
                 self.decide(cid);
+            }
+            if near {
+                self.make_room(me, dt);
             }
         }
         self.grow(cid);
@@ -1465,7 +1489,9 @@ impl Sim {
             let p = home + Vec3::new(a.cos() * r, 0.0, a.sin() * r);
             let t = &self.snap.terrain;
             let in_water = t.height(p.x, p.z) < t.water(p.x, p.z) - 0.3;
-            if in_water == wet && (if wet { self.can_be_at(who, p, 0.3) } else { t.height(p.x, p.z) > t.water(p.x, p.z) + 0.3 }) {
+            let there = if wet { self.can_be_at(who, p, 0.3) } else { t.height(p.x, p.z) > t.water(p.x, p.z) + 0.3 };
+            // Somewhere it could stand: not in a wall or a house's middle.
+            if in_water == wet && there && self.open_at(who, p) {
                 self.plan(ActorId::Npc(cid), vec![Action::Goto { target: Target::Point([p.x, 0.0, p.z]), run: false }], "", false);
                 return;
             }

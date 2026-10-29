@@ -33,10 +33,33 @@ body: a radius, a height, and a step of a quarter of its height.
 | **Crouch** | down to 58%; stands up only with room overhead. Characters crouch on their own when a gap fits them crouched but not standing. |
 | **Run** | × 1.7 |
 | **Falls** | from higher than 1.5 × its height they hurt, 12% per metre beyond |
-| **Swimming** | in deep water a body swims; `Space` and `c` go up and down |
+| **Swimming** | in deep water a body swims; `Space` and `c` go up and down. Near the top, a wall standing in the water stops its head too: it can't slip under and come up inside |
 
 So the same house is a home to a person and closed to a giant, and a cat walks
 through a gap a dog can't.
+
+### Finding the way (`sim/paths.rs`)
+
+Characters and animals walk round what is in their way instead of into it.
+
+- **Cells.** The ground is looked at in half-metre cells, each judged by the walk's
+  own rules for that body (its step, its clearance, water it may be in, rock faces,
+  ledges it would fall off). Only cells a search needs are looked at; they are kept
+  20 s for other bodies of the same size and dropped when the world changes.
+- **Search.** A straight line first; when that is blocked, A* over the cells, and
+  the path pulled straight between its corners. A body comes into a cell at a height, so a bridge deck and the bank under
+  it are different places. A goal nobody can stand on gets as near as it goes.
+- **Rooms and levels** keep their own routing: inside a room, and on the last steps
+  to a doorway or a stair, a body walks as before. Cells only get it to the next
+  doorway or stair foot.
+- **Room between bodies.** Bodies aren't in the cells. A walker leans off anyone
+  nearer than touching plus 0.3 m and steps round one straight ahead. One standing
+  about steps apart, and one sent to a spot someone already stands on stops beside
+  them.
+- **Cost.** At most 2,000 new cells and 3,000 search places a frame, 1,500 places a
+  search; past that a body walks straight and looks again next frame. Only bodies
+  within the near range of a traveler find paths; divers, flyers and climbers go
+  straight. Swimmers at the top find paths through the water like walkers.
 
 ---
 
@@ -213,6 +236,7 @@ on bare hilltops.
 - Characters route through one building's doorways and stairs at a time. A building
   made of several shapes, or a path in by one door and out by another, isn't planned
   as a whole.
+- Herds don't flock as one body; divers swim straight.
 - Sitting in a vehicle or carrying an animal isn't saved: after a restart you stand
   where you were. Something stuck in a body falls out on a restart.
 - Land vehicles drive straight at where they go, not along roads.
