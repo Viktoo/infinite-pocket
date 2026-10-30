@@ -26,7 +26,7 @@ pub struct Tunnel {
 pub fn find() -> Option<std::path::PathBuf> {
     let mut dirs: Vec<std::path::PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
     dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(std::path::PathBuf::from));
-    dirs.into_iter().map(|d| d.join("ngrok")).find(|p| p.is_file())
+    dirs.into_iter().map(|d| d.join(format!("ngrok{}", std::env::consts::EXE_SUFFIX))).find(|p| p.is_file())
 }
 
 impl Tunnel {

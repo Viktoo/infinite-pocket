@@ -36,7 +36,7 @@ when the hashes differ, the one who is behind is told to update.
 ## Cutting a release
 
 1. Bump `version` in `Cargo.toml` (`0.2.0`), and run `cargo build` so `Cargo.lock`
-   follows.
+   follows. Change the README's build-from-source lines to `--tag v0.2.0` (a test checks).
 2. Run `cargo test --release --features slow-tests`.
 3. Commit (`Release 0.2.0`), then tag and push the tag:
 

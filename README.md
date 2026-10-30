@@ -79,6 +79,10 @@ An agent can look at anyone it made, in front of their own home. Here are 36 peo
 
 ## Build from source
 
+The `--tag` builds the release brew installs, so you can play with Mac players. Leave it off for the latest code.
+
+### Mac
+
 ```bash
 xcode-select --install
 ```
@@ -94,8 +98,28 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Then open a new terminal, so `cargo` is found.
 
 ```bash
-cargo install --locked --git https://github.com/Viktoo/infinite-pocket
+cargo install --locked --git https://github.com/Viktoo/infinite-pocket --tag v0.3.0
 ```
+
+### Windows
+
+In PowerShell:
+
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+```powershell
+winget install Rustlang.Rustup Kitware.CMake LLVM.LLVM Git.Git
+```
+
+Then open a new PowerShell, so `cargo` is found.
+
+```powershell
+cargo install --locked --git https://github.com/Viktoo/infinite-pocket --tag v0.3.0
+```
+
+Then run `pocket`. To host, allow it on private networks when Windows Firewall asks. To update, run the `cargo install` line again with the new release's tag.
 
 Tests and releases: [docs/guide.md](docs/guide.md#tests), [docs/releases.md](docs/releases.md).
 

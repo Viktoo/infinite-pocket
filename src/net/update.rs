@@ -75,4 +75,11 @@ mod tests {
         assert!(!super::is_newer("v0.4.1", "0.4.2"));
         assert!(!super::is_newer("nightly", "0.4.2"));
     }
+
+    /// Built from source, the tag the README names: this release, so it plays with brew's.
+    #[test]
+    fn readme_installs_this_release() {
+        let tag = format!("--tag v{}", env!("CARGO_PKG_VERSION"));
+        assert!(include_str!("../../README.md").contains(&tag), "README's build from source should say {tag}");
+    }
 }
